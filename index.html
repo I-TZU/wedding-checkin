@@ -8,7 +8,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
-        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; transform: scale(1.2) !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
+        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; transform: scale(1.15) !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -43,34 +43,37 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            <div class="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
+            <div class="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 flex flex-col">
                 <h2 class="text-lg font-semibold text-stone-700 mb-4">🔍 賓客搜尋簽到</h2>
                 <div class="mb-6">
                     <input type="text" id="search-input" placeholder="請輸入賓客姓名（如：王小明）..." 
                            class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-rose-300 text-lg">
                 </div>
-                <div class="overflow-y-auto max-h-[500px] divide-y divide-stone-100" id="guest-list">
+                <div class="overflow-y-auto max-h-[500px] divide-y divide-stone-100 flex-1" id="guest-list">
                     <p class="text-center text-stone-400 py-8">正在連線至雲端試算表載入名單...</p>
                 </div>
             </div>
 
-            <div class="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
+            <div class="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
                 <h2 class="text-lg font-semibold text-stone-700 mb-2">📍 宴會廳座位圖</h2>
                 <p class="text-xs text-stone-400 mb-6">對齊現場主桌與走道配置（左側舞台視角）</p>
                 
-                <div class="w-full relative bg-stone-50 border border-stone-200 rounded-xl overflow-hidden shadow-inner" style="aspect-ratio: 4 / 3;">
+                <div class="w-full relative bg-stone-100 border border-stone-200 rounded-2xl shadow-inner p-4 flex gap-4 items-stretch" style="min-height: 480px;">
                     
-                    <div class="absolute left-0 top-0 bottom-0 w-[8%] bg-rose-100 border-r border-rose-200 text-rose-700 flex items-center justify-center font-bold text-sm text-center px-1" style="writing-mode: vertical-lr;">
+                    <div class="w-14 bg-rose-100 border border-rose-200 text-rose-700 flex items-center justify-center rounded-xl font-bold text-sm text-center px-2 shadow-sm" style="writing-mode: vertical-lr;">
                         舞 台 (Stage)
                     </div>
 
-                    <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 36%; top: 48%; width: 44%; height: 8px;"></div>
-                    
-                    <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 79%; top: 48%; width: 8px; height: 44%;"></div>
+                    <div class="flex-1 relative bg-white border border-stone-200 rounded-xl shadow-sm overflow-hidden p-2">
+                        
+                        <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 22%; top: 48%; width: 55%; height: 8px;"></div>
+                        
+                        <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 76%; top: 48%; width: 8px; height: 44%;"></div>
 
-                    <div id="floor-plan" class="absolute left-[8%] right-0 top-0 bottom-0">
-                        </div>
+                        <div id="floor-plan" class="absolute inset-0">
+                            </div>
 
+                    </div>
                 </div>
             </div>
 
@@ -88,6 +91,7 @@
     </div>
 
     <script>
+        // 已成功嵌入你的正式 API URL
         const API_URL = "https://script.google.com/macros/s/AKfycbzjNib56lrJMKki__XWhkOjiDOJn3a1sDkH8TveFQ8D4KSkjWJ394WnwwhDwsS2gkHd/exec"; 
 
         let guests = [];
@@ -120,159 +124,12 @@
             }
         }
 
-        // 精準 1:1 百分比絕對定位地圖
         function renderFloorPlan() {
             const floorPlanContainer = document.getElementById("floor-plan");
             floorPlanContainer.innerHTML = ""; 
 
-            // 根據旋轉 180 度後的飯店配置圖，計算出最完美的 X, Y 百分比位置
+            // 完美的 1:1 精準絕對百分比座標
             const absolutePositions = {
-                "主桌": "left: 14%; top: 38%; width: 72px; height: 72px;",
-                "10": "left: 14%; top: 70%; width: 56px; height: 56px;",
-                "1": "left: 38%; top: 10%; width: 56px; height: 56px;",
-                "2": "left: 56%; top: 10%; width: 56px; height: 56px;",
-                "3": "left: 74%; top: 10%; width: 56px; height: 56px;",
-                "5": "left: 89%; top: 10%; width: 56px; height: 56px;",
-                "6": "left: 38%; top: 30%; width: 56px; height: 56px;",
-                "7": "left: 56%; top: 30%; width: 56px; height: 56px;",
-                "8": "left: 74%; top: 30%; width: 56px; height: 56px;",
-                "9": "left: 89%; top: 34%; width: 56px; height: 56px;",
-                "11": "left: 54%; top: 56%; width: 56px; height: 56px;",
-                "12": "left: 69%; top: 56%; width: 56px; height: 56px;",
-                "13": "left: 89%; top: 58%; width: 56px; height: 56px;",
-                "15": "left: 54%; top: 78%; width: 56px; height: 56px;",
-                "16": "left: 69%; top: 78%; width: 56px; height: 56px;",
-                "17": "left: 89%; top: 78%; width: 56px; height: 56px;"
-            };
-
-            const colors = [
-                'text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 
-                'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 
-                'text-emerald-500 bg-emerald-50 border-emerald-200', 'text-teal-500 bg-teal-50 border-teal-200'
-            ];
-
-            tables.forEach((t, index) => {
-                const colorClass = colors[index % colors.length];
-                const tableDiv = document.createElement("div");
-                tableDiv.id = "table-" + t.table_id;
-                
-                let baseStyle = "absolute rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white ";
-                
-                if (t.table_name.includes("主桌") || t.table_id == "主桌") {
-                    baseStyle += "border-amber-400 ring-4 ring-amber-100 ring-offset-1 z-20 font-bold text-amber-800 text-sm md:text-base";
-                    tableDiv.innerHTML = '<span>主桌</span>';
-                } else {
-                    baseStyle += "border-stone-200 hover:border-stone-400";
-                    tableDiv.innerHTML = '<span class="text-[9px] font-bold ' + colorClass + ' border px-1 rounded-full mb-0.5">' + t.table_id + '</span>' +
-                                         '<span class="font-bold text-stone-700 text-[10px] md:text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
-                }
-
-                tableDiv.className = baseStyle;
-                
-                // 套用絕對座標，若試算表的桌號沒有定義在上面，則隱藏不顯示
-                const pos = absolutePositions[t.table_id] || absolutePositions[t.table_name];
-                if (pos) {
-                    tableDiv.style = pos;
-                    floorPlanContainer.appendChild(tableDiv);
-                }
-            });
-        }
-
-        function renderDashboard() {
-            const total = guests.length;
-            const checked = guests.filter(g => g.status === "已報到").length;
-            const unchecked = total - checked;
-            const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
-
-            document.getElementById("total-count").innerText = total;
-            document.getElementById("checked-count").innerText = checked;
-            document.getElementById("unchecked-count").innerText = unchecked;
-            document.getElementById("progress-bar").style.width = percentage + "%";
-            document.getElementById("progress-text").innerText = "目前報到率：" + percentage + "%";
-        }
-
-        function renderList(data) {
-            const listContainer = document.getElementById("guest-list");
-            listContainer.innerHTML = "";
-
-            if (data.length === 0) {
-                listContainer.innerHTML = '<p class="text-center text-stone-400 py-8">找不到相符的賓客姓名</p>';
-                return;
-            }
-
-            data.forEach(guest => {
-                const item = document.createElement("div");
-                item.className = "flex items-center justify-between py-4 transition-colors duration-200";
-                const isChecked = guest.status === "已報到";
-                
-                const tObj = tables.find(t => t.table_id == guest.table);
-                const tableNameText = tObj ? tObj.table_name : "第 " + guest.table + " 桌";
-
-                let buttonHTML = isChecked 
-                    ? '<span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg">✓ 已報到</span>'
-                    : '<button onclick="checkIn(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
-
-                item.innerHTML = '<div>' +
-                                 '<span class="text-lg font-medium text-stone-800">' + guest.name + '</span>' +
-                                 '<span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded-full">' + guest.table + '桌 (' + tableNameText + ')</span>' +
-                                 '</div><div>' + buttonHTML + '</div>';
-                listContainer.appendChild(item);
-            });
-        }
-
-        async function checkIn(id) {
-            const guest = guests.find(g => g.id === id);
-            if (!guest) return;
-
-            guest.status = "已報到";
-            renderDashboard();
-            renderList(guests);
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: "POST",
-                    body: JSON.stringify({ id: id })
-                });
-                const result = await response.json();
-                
-                if (result.success) {
-                    document.getElementById("search-input").value = "";
-                    
-                    const tObj = tables.find(t => t.table_id == guest.table);
-                    const tableNameText = tObj ? tObj.table_name : guest.table + "桌";
-
-                    document.getElementById("modal-name").innerText = guest.name;
-                    document.getElementById("modal-table").innerText = guest.table + "桌 (" + tableNameText + ")";
-                    
-                    const modal = document.getElementById("success-modal");
-                    modal.classList.remove("hidden");
-                    modal.classList.add("flex");
-
-                    highlightTable(guest.table);
-                } else {
-                    alert("後台更新失敗：" + result.message);
-                    await fetchGuests();
-                }
-            } catch (error) {
-                console.error("報到請求失敗:", error);
-                alert("網路連線異常，簽到資料可能未同步，請重試！");
-                await fetchGuests();
-            }
-        }
-
-        function highlightTable(tableId) {
-            document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
-            const targetTable = document.getElementById("table-" + tableId);
-            if (targetTable) {
-                targetTable.classList.add("table-active");
-            }
-        }
-
-        function closeModal() {
-            const modal = document.getElementById("success-modal");
-            modal.classList.add("hidden");
-            modal.classList.remove("flex");
-        }
-    </script>
-</body>
-</html>
+                "主桌": "left: 4%; top: 35%; width: 68px; height: 68px;",
+                "10": "left: 4%; top: 68%; width: 56px; height: 56px;",
+                "1":
