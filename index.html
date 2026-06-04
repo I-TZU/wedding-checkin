@@ -8,13 +8,12 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
-        /* 點擊確認報到時，座位圖圓圈的放大紅色高亮動畫樣式 */
-        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; transform: scale(1.15); z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3); }
+        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; transform: scale(1.2) !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto">
+    <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-stone-800 mb-2">✨ Our Wedding Guest Check-In ✨</h1>
             <p class="text-stone-500">婚禮現場賓客報到與座位查詢系統</p>
@@ -42,34 +41,36 @@
             <p id="progress-text" class="text-right text-xs text-stone-500 mt-2">目前報到率：0%</p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
+            <div class="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
                 <h2 class="text-lg font-semibold text-stone-700 mb-4">🔍 賓客搜尋簽到</h2>
-                
                 <div class="mb-6">
                     <input type="text" id="search-input" placeholder="請輸入賓客姓名（如：王小明）..." 
                            class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-rose-300 text-lg">
                 </div>
-
-                <div class="overflow-y-auto max-h-[450px] divide-y divide-stone-100" id="guest-list">
+                <div class="overflow-y-auto max-h-[500px] divide-y divide-stone-100" id="guest-list">
                     <p class="text-center text-stone-400 py-8">正在連線至雲端試算表載入名單...</p>
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
+            <div class="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-stone-200">
                 <h2 class="text-lg font-semibold text-stone-700 mb-2">📍 宴會廳座位圖</h2>
-                <p class="text-xs text-stone-400 mb-6">座位由試算表自動生成，點擊確認報到時對應桌次會高亮提示</p>
+                <p class="text-xs text-stone-400 mb-6">對齊現場主桌與走道配置（左側舞台視角）</p>
                 
-                <div class="flex gap-4 items-stretch min-h-[400px]">
+                <div class="w-full relative bg-stone-50 border border-stone-200 rounded-xl overflow-hidden shadow-inner" style="aspect-ratio: 4 / 3;">
                     
-                    <div class="w-12 bg-rose-100 text-rose-700 flex items-center justify-center rounded-xl font-bold text-sm shadow-inner text-center px-2" style="writing-mode: vertical-lr;">
+                    <div class="absolute left-0 top-0 bottom-0 w-[8%] bg-rose-100 border-r border-rose-200 text-rose-700 flex items-center justify-center font-bold text-sm text-center px-1" style="writing-mode: vertical-lr;">
                         舞 台 (Stage)
                     </div>
 
-                    <div class="flex-1 grid grid-cols-5 gap-y-6 gap-x-4 relative bg-stone-50 p-4 rounded-xl border border-stone-100 shadow-inner overflow-hidden" id="floor-plan">
-                        </div>
+                    <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 36%; top: 48%; width: 44%; height: 8px;"></div>
                     
+                    <div class="absolute bg-orange-400 rounded-full shadow-sm z-10" style="left: 79%; top: 48%; width: 8px; height: 44%;"></div>
+
+                    <div id="floor-plan" class="absolute left-[8%] right-0 top-0 bottom-0">
+                        </div>
+
                 </div>
             </div>
 
@@ -82,24 +83,19 @@
             <h3 class="text-2xl font-bold text-stone-800 mb-2">歡迎光臨！</h3>
             <p id="modal-name" class="text-xl font-medium text-rose-600 mb-1">---</p>
             <p class="text-stone-500 mb-6">您的座位在：<span id="modal-table" class="font-bold text-stone-800 bg-amber-100 px-2 py-1 rounded">---</span></p>
-            <button onclick="closeModal()" class="w-full bg-stone-800 text-white py-3 rounded-xl font-medium hover:bg-stone-700 transition">
-                確認
-            </button>
+            <button onclick="closeModal()" class="w-full bg-stone-800 text-white py-3 rounded-xl font-medium hover:bg-stone-700 transition">確認</button>
         </div>
     </div>
 
     <script>
-        // 已對齊你部署的 Google Apps Script 網頁應用程式 URL
         const API_URL = "https://script.google.com/macros/s/AKfycbzjNib56lrJMKki__XWhkOjiDOJn3a1sDkH8TveFQ8D4KSkjWJ394WnwwhDwsS2gkHd/exec"; 
 
         let guests = [];
         let tables = [];
 
-        // 網頁加載完畢初始化
         document.addEventListener("DOMContentLoaded", async () => {
             await fetchGuests();
             
-            // 綁定即時模糊搜尋監聽器
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
                 const filtered = guests.filter(g => g.name.includes(keyword));
@@ -107,101 +103,81 @@
             });
         });
 
-        // 呼叫 API 取回試算表的雙分頁打包資料
         async function fetchGuests() {
             try {
                 const response = await fetch(API_URL);
                 const resData = await response.json();
                 
-                guests = resData.guests; // 儲存賓客清單
-                tables = resData.tables; // 儲存桌次對照表
+                guests = resData.guests;
+                tables = resData.tables;
                 
                 renderDashboard();
                 renderList(guests);
-                renderFloorPlan(); // 自動繪製旋轉 180 度的地圖
+                renderFloorPlan(); 
             } catch (error) {
                 console.error("無法讀取賓客名單:", error);
-                document.getElementById("guest-list").innerHTML = '<p class="text-center text-red-500 py-8">⚠️ 無法連線至後台，請確認網路與試算表分頁名稱設定。</p>';
+                document.getElementById("guest-list").innerHTML = '<p class="text-center text-red-500 py-8">⚠️ 無法連線至後台，請確認試算表分頁名稱是否為「賓客名單」與「桌次對照」。</p>';
             }
         }
 
-        // 依照 180 度逆時針旋轉圖面，精準定義 $4 \times 5$ 的 2D 矩陣擺放座標
+        // 精準 1:1 百分比絕對定位地圖
         function renderFloorPlan() {
             const floorPlanContainer = document.getElementById("floor-plan");
-            floorPlanContainer.innerHTML = ""; // 清空外殼
+            floorPlanContainer.innerHTML = ""; 
 
-            // 完美的 2D 棋盤座標映射表 (網頁第 1 欄保留給左側舞台，座位從第 2 欄開始)
-            const finalGrid = {
-                "主桌": "grid-row: 2/span 2; grid-column: 2; align-self: center; justify-self: center;",
-                "1": "grid-row: 1; grid-column: 3;",
-                "2": "grid-row: 1; grid-column: 4;",
-                "3": "grid-row: 1; grid-column: 5; margin-right: 50px;",
-                "5": "grid-row: 1; grid-column: 5; margin-left: auto;",
-                "6": "grid-row: 2; grid-column: 3;",
-                "7": "grid-row: 2; grid-column: 4;",
-                "8": "grid-row: 2; grid-column: 5; margin-right: 50px;",
-                "9": "grid-row: 2; grid-column: 5; margin-left: auto; transform: translateY(35px); z-index:20;",
-                "11": "grid-row: 3; grid-column: 4; transform: translateY(-10px);",
-                "12": "grid-row: 3; grid-column: 5; margin-right: 50px; transform: translateY(-10px);",
-                "13": "grid-row: 3; grid-column: 5; margin-left: auto; transform: translateY(25px); z-index:20;",
-                "10": "grid-row: 3; grid-column: 2; align-self: end; justify-self: center; transform: translateY(15px);",
-                "15": "grid-row: 4; grid-column: 3;",
-                "16": "grid-row: 4; grid-column: 4;",
-                "17": "grid-row: 4; grid-column: 5; margin-left: auto;"
+            // 根據旋轉 180 度後的飯店配置圖，計算出最完美的 X, Y 百分比位置
+            const absolutePositions = {
+                "主桌": "left: 14%; top: 38%; width: 72px; height: 72px;",
+                "10": "left: 14%; top: 70%; width: 56px; height: 56px;",
+                "1": "left: 38%; top: 10%; width: 56px; height: 56px;",
+                "2": "left: 56%; top: 10%; width: 56px; height: 56px;",
+                "3": "left: 74%; top: 10%; width: 56px; height: 56px;",
+                "5": "left: 89%; top: 10%; width: 56px; height: 56px;",
+                "6": "left: 38%; top: 30%; width: 56px; height: 56px;",
+                "7": "left: 56%; top: 30%; width: 56px; height: 56px;",
+                "8": "left: 74%; top: 30%; width: 56px; height: 56px;",
+                "9": "left: 89%; top: 34%; width: 56px; height: 56px;",
+                "11": "left: 54%; top: 56%; width: 56px; height: 56px;",
+                "12": "left: 69%; top: 56%; width: 56px; height: 56px;",
+                "13": "left: 89%; top: 58%; width: 56px; height: 56px;",
+                "15": "left: 54%; top: 78%; width: 56px; height: 56px;",
+                "16": "left: 69%; top: 78%; width: 56px; height: 56px;",
+                "17": "left: 89%; top: 78%; width: 56px; height: 56px;"
             };
 
-            // 圓圈標籤色彩池
             const colors = [
-                'text-rose-500 bg-rose-50 border-rose-200', 
-                'text-blue-500 bg-blue-50 border-blue-200', 
-                'text-purple-500 bg-purple-50 border-purple-200', 
-                'text-amber-500 bg-amber-50 border-amber-200', 
-                'text-emerald-500 bg-emerald-50 border-emerald-200', 
-                'text-teal-500 bg-teal-50 border-teal-200', 
-                'text-indigo-500 bg-indigo-50 border-indigo-200'
+                'text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 
+                'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 
+                'text-emerald-500 bg-emerald-50 border-emerald-200', 'text-teal-500 bg-teal-50 border-teal-200'
             ];
 
-            // 動態繪製【橫向橘色背板線條】
-            const lineH = document.createElement("div");
-            lineH.style = "grid-row: 2; grid-column: 3/span 2; align-self: end; height: 10px; transform: translateY(14px);";
-            lineH.className = "bg-orange-400 rounded-full z-10 shadow-sm";
-            floorPlanContainer.appendChild(lineH);
-
-            // 動態繪製【縱向橘色背板線條】
-            const lineV = document.createElement("div");
-            lineV.style = "grid-row: 2/span 3; grid-column: 4; justify-self: end; width: 10px; transform: translateX(12px); height: 105%;";
-            lineV.className = "bg-orange-400 rounded-full z-10 shadow-sm";
-            floorPlanContainer.appendChild(lineV);
-
-            // 動態產生每一張桌子的圓圈
             tables.forEach((t, index) => {
                 const colorClass = colors[index % colors.length];
                 const tableDiv = document.createElement("div");
                 tableDiv.id = "table-" + t.table_id;
                 
-                // 固定寬高圓圈、陰影與平滑過渡動畫
-                let baseClass = "rounded-full aspect-square flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white w-[56px] h-[56px] md:w-[66px] md:h-[66px] ";
+                let baseStyle = "absolute rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white ";
                 
-                // 主桌金色特殊處理
                 if (t.table_name.includes("主桌") || t.table_id == "主桌") {
-                    baseClass += "border-amber-400 ring-4 ring-amber-100 ring-offset-2 z-20 scale-110";
-                    tableDiv.innerHTML = '<span class="font-bold text-amber-800 text-xs md:text-sm">主桌</span>';
+                    baseStyle += "border-amber-400 ring-4 ring-amber-100 ring-offset-1 z-20 font-bold text-amber-800 text-sm md:text-base";
+                    tableDiv.innerHTML = '<span>主桌</span>';
                 } else {
-                    // 一般客桌處理
-                    baseClass += "border-stone-200 hover:border-stone-400";
-                    tableDiv.innerHTML = '<span class="text-[9px] font-bold ' + colorClass + ' border px-1 rounded-full mb-0.5">' + t.table_id + ' 桌</span>' +
-                                         '<span class="font-bold text-stone-700 text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
+                    baseStyle += "border-stone-200 hover:border-stone-400";
+                    tableDiv.innerHTML = '<span class="text-[9px] font-bold ' + colorClass + ' border px-1 rounded-full mb-0.5">' + t.table_id + '</span>' +
+                                         '<span class="font-bold text-stone-700 text-[10px] md:text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
                 }
 
-                tableDiv.className = baseClass;
-                // 強制套用矩陣對照表中的 2D CSS 位置，沒配對到則不顯示
-                tableDiv.style = finalGrid[t.table_id] || finalGrid[t.table_name] || "display:none;";
-
-                floorPlanContainer.appendChild(tableDiv);
+                tableDiv.className = baseStyle;
+                
+                // 套用絕對座標，若試算表的桌號沒有定義在上面，則隱藏不顯示
+                const pos = absolutePositions[t.table_id] || absolutePositions[t.table_name];
+                if (pos) {
+                    tableDiv.style = pos;
+                    floorPlanContainer.appendChild(tableDiv);
+                }
             });
         }
 
-        // 計算並渲染進度條儀表板
         function renderDashboard() {
             const total = guests.length;
             const checked = guests.filter(g => g.status === "已報到").length;
@@ -215,7 +191,6 @@
             document.getElementById("progress-text").innerText = "目前報到率：" + percentage + "%";
         }
 
-        // 渲染左側賓客名單
         function renderList(data) {
             const listContainer = document.getElementById("guest-list");
             listContainer.innerHTML = "";
@@ -230,11 +205,9 @@
                 item.className = "flex items-center justify-between py-4 transition-colors duration-200";
                 const isChecked = guest.status === "已報到";
                 
-                // 動態從 tables 資料中尋找該桌號數字對應的中文名稱
                 const tObj = tables.find(t => t.table_id == guest.table);
                 const tableNameText = tObj ? tObj.table_name : "第 " + guest.table + " 桌";
 
-                // 動態產生按鈕或已報到標籤
                 let buttonHTML = isChecked 
                     ? '<span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg">✓ 已報到</span>'
                     : '<button onclick="checkIn(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
@@ -247,12 +220,10 @@
             });
         }
 
-        // 點擊「確認報到」按鈕觸發事件 (發送 POST 請求)
         async function checkIn(id) {
             const guest = guests.find(g => g.id === id);
             if (!guest) return;
 
-            // 前端先跑視覺更新，營造流暢感
             guest.status = "已報到";
             renderDashboard();
             renderList(guests);
@@ -265,21 +236,18 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    document.getElementById("search-input").value = ""; // 清空搜尋欄
+                    document.getElementById("search-input").value = "";
                     
                     const tObj = tables.find(t => t.table_id == guest.table);
                     const tableNameText = tObj ? tObj.table_name : guest.table + "桌";
 
-                    // 填充歡迎 Modal 視窗內容
                     document.getElementById("modal-name").innerText = guest.name;
                     document.getElementById("modal-table").innerText = guest.table + "桌 (" + tableNameText + ")";
                     
-                    // 彈出視窗顯示
                     const modal = document.getElementById("success-modal");
                     modal.classList.remove("hidden");
                     modal.classList.add("flex");
 
-                    // 觸發右側地圖桌子圓圈高亮
                     highlightTable(guest.table);
                 } else {
                     alert("後台更新失敗：" + result.message);
@@ -292,18 +260,14 @@
             }
         }
 
-        // 控制右側座位圖高亮
         function highlightTable(tableId) {
-            // 清除前一次的高亮圓圈
             document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
-            // 尋找目標圓圈（例如 id="table-17"）
             const targetTable = document.getElementById("table-" + tableId);
             if (targetTable) {
                 targetTable.classList.add("table-active");
             }
         }
 
-        // 關閉 Modal
         function closeModal() {
             const modal = document.getElementById("success-modal");
             modal.classList.add("hidden");
