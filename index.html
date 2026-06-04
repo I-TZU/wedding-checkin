@@ -132,4 +132,150 @@
             const absolutePositions = {
                 "主桌": "left: 4%; top: 35%; width: 68px; height: 68px;",
                 "10": "left: 4%; top: 68%; width: 56px; height: 56px;",
-                "1":
+                "1": "left: 26%; top: 10%; width: 56px; height: 56px;",
+                "2": "left: 46%; top: 10%; width: 56px; height: 56px;",
+                "3": "left: 66%; top: 10%; width: 56px; height: 56px;",
+                "5": "left: 85%; top: 10%; width: 56px; height: 56px;",
+                "6": "left: 26%; top: 30%; width: 56px; height: 56px;",
+                "7": "left: 46%; top: 30%; width: 56px; height: 56px;",
+                "8": "left: 66%; top: 30%; width: 56px; height: 56px;",
+                "9": "left: 85%; top: 32%; width: 56px; height: 56px;",
+                "11": "left: 42%; top: 56%; width: 56px; height: 56px;",
+                "12": "left: 60%; top: 56%; width: 56px; height: 56px;",
+                "13": "left: 85%; top: 56%; width: 56px; height: 56px;",
+                "15": "left: 42%; top: 76%; width: 56px; height: 56px;",
+                "16": "left: 60%; top: 76%; width: 56px; height: 56px;",
+                "17": "left: 85%; top: 76%; width: 56px; height: 56px;"
+            };
+
+            const colors = [
+                'text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 
+                'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 
+                'text-emerald-500 bg-emerald-50 border-emerald-200', 'text-teal-500 bg-teal-50 border-teal-200'
+            ];
+
+            tables.forEach((t, index) => {
+                const colorClass = colors[index % colors.length];
+                const tableDiv = document.createElement("div");
+                tableDiv.id = "table-" + t.table_id;
+                
+                let baseStyle = "absolute rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white ";
+                
+                if (t.table_name.includes("主桌") || t.table_id == "主桌") {
+                    baseStyle += "border-amber-400 ring-4 ring-amber-100 ring-offset-1 z-20 font-bold text-amber-800 text-sm";
+                    tableDiv.innerHTML = '<span>主桌</span>';
+                } else {
+                    baseStyle += "border-stone-200 hover:border-stone-400";
+                    tableDiv.innerHTML = '<span class="text-[9px] font-bold ' + colorClass + ' border px-1 rounded-full mb-0.5">' + t.table_id + '</span>' +
+                                         '<span class="font-bold text-stone-700 text-[10px] md:text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
+                }
+
+                tableDiv.className = baseStyle;
+                
+                const pos = absolutePositions[t.table_id] || absolutePositions[t.table_name];
+                if (pos) {
+                    tableDiv.style = pos;
+                    floorPlanContainer.appendChild(tableDiv);
+                }
+            });
+        }
+
+        function renderDashboard() {
+            const total = guests.length;
+            const checked = guests.filter(g => g.status === "已報到").length;
+            const unchecked = total - checked;
+            const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+            document.getElementById("total-count").innerText = total;
+            document.getElementById("checked-count").innerText = checked;
+            document.getElementById("unchecked-count").innerText = unchecked;
+            document.getElementById("progress-bar").style.width = percentage + "%";
+            document.getElementById("progress-text").innerText = "目前報到率：" + percentage + "%";
+        }
+
+        // 修改名單渲染邏輯，防止與 tables 的 int/string 類型比對失準
+        function renderList(data) {
+            const listContainer = document.getElementById("guest-list");
+            listContainer.innerHTML = "";
+
+            if (data.length === 0) {
+                listContainer.innerHTML = '<p class="text-center text-stone-400 py-8">找不到相符的賓客姓名</p>';
+                return;
+            }
+
+            data.forEach(guest => {
+                const item = document.createElement("div");
+                item.className = "flex items-center justify-between py-4 transition-colors duration-200";
+                const isChecked = guest.status === "已報到";
+                
+                const tObj = tables.find(t => String(t.table_id).trim() === String(guest.table).trim());
+                const tableNameText = tObj ? tObj.table_name : "第 " + guest.table + " 桌";
+
+                let buttonHTML = isChecked 
+                    ? '<span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg">✓ 已報到</span>'
+                    : '<button onclick="checkIn(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
+
+                item.innerHTML = '<div>' +
+                                 '<span class="text-lg font-medium text-stone-800">' + guest.name + '</span>' +
+                                 '<span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded-full">' + guest.table + '桌 (' + tableNameText + ')</span>' +
+                                 '</div><div>' + buttonHTML + '</div>';
+                listContainer.appendChild(item);
+            });
+        }
+
+        async function checkIn(id) {
+            const guest = guests.find(g => g.id === id);
+            if (!guest) return;
+
+            guest.status = "已報到";
+            renderDashboard();
+            renderList(guests);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ id: id })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById("search-input").value = "";
+                    
+                    const tObj = tables.find(t => String(t.table_id).trim() === String(guest.table).trim());
+                    const tableNameText = tObj ? tObj.table_name : guest.table + "桌";
+
+                    document.getElementById("modal-name").innerText = guest.name;
+                    document.getElementById("modal-table").innerText = guest.table + "桌 (" + tableNameText + ")";
+                    
+                    const modal = document.getElementById("success-modal");
+                    modal.classList.remove("hidden");
+                    modal.classList.add("flex");
+
+                    highlightTable(guest.table);
+                } else {
+                    alert("後台更新失敗：" + result.message);
+                    await fetchGuests();
+                }
+            } catch (error) {
+                console.error("報到請求失敗:", error);
+                alert("網路連線異常，簽到資料可能未同步，請重試！");
+                await fetchGuests();
+            }
+        }
+
+        function highlightTable(tableId) {
+            document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            const targetTable = document.getElementById("table-" + tableId);
+            if (targetTable) {
+                targetTable.classList.add("table-active");
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById("success-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+    </script>
+</body>
+</html>
