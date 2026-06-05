@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>婚禮賓客報到與座位查詢系統</title>
+    <title>婚禮賓客現場報到與座位查詢系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
@@ -63,7 +63,7 @@
                     </div>
 
                     <div class="flex-1 bg-white border border-stone-200 rounded-xl shadow-sm p-2 flex items-center justify-center overflow-hidden">
-                        <div id="floor-plan" class="w-full h-[400px] md:h-[460px] relative"></div>
+                        <div id="floor-plan" class="w-full h-[360px] md:h-[390px] relative"></div>
                     </div>
                 </div>
             </div>
@@ -104,7 +104,7 @@
                 
                 const resData = await response.json();
                 
-                // 【全權依靠後台】直接載入，不做任何前端硬編碼的尾數過濾
+                // 100% 信任後台資料呈現
                 guests = resData.guests;
                 tables = resData.tables;
                 
@@ -113,11 +113,7 @@
                 renderFloorPlan(); 
             } catch (error) {
                 console.error("無法讀取賓客名單:", error);
-                document.getElementById("guest-list").innerHTML = 
-                    '<div class="text-center text-red-500 py-8 px-4">' +
-                    '<p class="font-bold text-lg mb-2">⚠️ 系統載入失敗</p>' +
-                    '<p class="text-xs text-stone-500 bg-stone-50 p-3 rounded-lg border text-left break-all font-mono">' + error.toString() + '</p>' +
-                    '</div>';
+                document.getElementById("guest-list").innerHTML = '<p class="text-center text-red-500 py-8">連線失敗，請檢查後台部署。</p>';
             }
         }
 
@@ -125,26 +121,25 @@
             const floorPlanContainer = document.getElementById("floor-plan");
             floorPlanContainer.innerHTML = ""; 
 
-            // 保持強大的 5 欄 4 列 CSS Grid 佈局
             floorPlanContainer.className = "w-full h-full grid grid-cols-5 grid-rows-4 gap-2 md:gap-4 p-2 relative";
 
-            // 根據第三張現場藍圖精準繪製橘色走道線 (置於底層 z-0)
+            // 調整中央走道橘色背板線，完美穿插在第2列與第3列正中間
             const lineH = document.createElement("div");
-            lineH.style.cssText = "position: absolute; left: 20%; width: 60%; top: 50%; height: 6px; transform: translateY(-3px);";
+            lineH.style.cssText = "position: absolute; left: 22%; width: 55%; top: 50%; height: 6px; transform: translateY(-3px);";
             lineH.className = "bg-orange-400 rounded-full z-0 opacity-40 shadow-sm";
             floorPlanContainer.appendChild(lineH);
 
             const lineV = document.createElement("div");
-            lineV.style.cssText = "position: absolute; left: 80%; top: 50%; height: 50%; width: 6px; transform: translateX(-3px);";
+            lineV.style.cssText = "position: absolute; left: 78%; top: 50%; height: 48%; width: 6px; transform: translateX(-3px);";
             lineV.className = "bg-orange-400 rounded-full z-0 opacity-40 shadow-sm";
             floorPlanContainer.appendChild(lineV);
 
-            // 【終極精準網格對照表】直接對齊試算表的 table_id (流水桌號)
+            // 【終極校正網格對照表】完全對齊平面圖
             const gridPositions = {
-                "主桌": "grid-row: 3; grid-column: 1;",
+                "主桌": "grid-row: 2 / span 2; grid-column: 1;", // 主桌縱向跨越第2,3列，置中且消滅紅圈空白
                 "1": "grid-row: 1; grid-column: 2;",
                 "6": "grid-row: 2; grid-column: 2;",
-                "10": "grid-row: 4; grid-column: 2;", // 10號桌移往右移一grid，精準落在6號桌下方
+                "10": "grid-row: 3; grid-column: 2;", // 10號桌移回第3列，精準對齊 11 桌
                 "2": "grid-row: 1; grid-column: 3;",
                 "7": "grid-row: 2; grid-column: 3;",
                 "11": "grid-row: 3; grid-column: 3;", 
@@ -159,26 +154,19 @@
                 "17": "grid-row: 4; grid-column: 5;"
             };
 
-            const colors = [
-                'text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 
-                'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 
-                'text-emerald-500 bg-emerald-50 border-emerald-200'
-            ];
+            const colors = ['text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 'text-emerald-500 bg-emerald-50 border-emerald-200'];
 
             tables.forEach((t, index) => {
                 const colorClass = colors[index % colors.length];
                 const tableDiv = document.createElement("div");
                 
-                // 清洗後台傳過來的 ID 字串
                 const cleanId = String(t.table_id).replace(".0", "").trim();
                 tableDiv.id = "table-" + cleanId;
                 
-                let baseStyle = "aspect-square rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white self-center justify-self-center w-full max-w-[75px] md:max-w-[92px] z-20 ";
+                let baseStyle = "aspect-square rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white self-center justify-self-center w-full max-w-[72px] md:max-w-[85px] z-20 ";
                 
-                const isMainTable = cleanId === "主桌" || String(t.table_name).includes("主桌");
-                
-                if (isMainTable) {
-                    tableDiv.className = baseStyle + "border-amber-400 ring-4 ring-amber-100 ring-offset-1 font-bold text-amber-800 text-xs md:text-sm scale-105";
+                if (cleanId === "主桌" || String(t.table_name).includes("主桌")) {
+                    tableDiv.className = baseStyle + "border-amber-400 ring-4 ring-amber-100 ring-offset-1 font-bold text-amber-800 text-xs md:text-sm scale-110";
                     tableDiv.innerHTML = '<span>主桌</span>';
                 } else {
                     tableDiv.className = baseStyle + "border-stone-200 hover:border-stone-400";
@@ -186,7 +174,6 @@
                                          '<span class="font-bold text-stone-700 text-[10px] md:text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
                 }
 
-                // 直接用 table_id 對照網格座標
                 const cssPos = gridPositions[cleanId];
                 if (cssPos) {
                     tableDiv.style.cssText = cssPos;
@@ -209,26 +196,21 @@
                 item.className = "flex items-center justify-between py-3.5 transition-colors duration-200";
                 const isChecked = guest.status === "已報到";
                 
-                // 依據流水號精準匹配試算表「桌次對照」分頁
                 const tObj = tables.find(t => {
-                    const cleanTableId = String(t.table_id).replace(".0", "").trim().toLowerCase();
-                    const cleanGuestTable = String(guest.table).replace(".0", "").trim().toLowerCase();
-                    return cleanTableId === cleanGuestTable;
+                    return String(t.table_id).replace(".0", "").trim().toLowerCase() === String(guest.table).replace(".0", "").trim().toLowerCase();
                 });
                 
-                // 【核心修改1：灰底備註正名邏輯】
+                // 左側灰底標籤格式化
                 let tableNameText = "";
                 if (tObj) {
                     const cleanId = String(tObj.table_id).replace(".0", "").trim();
-                    const isMainTable = cleanId === "主桌" || String(tObj.table_name).includes("主桌");
-                    
-                    if (isMainTable) {
-                        tableNameText = "主桌"; // 主桌是例外，不加括號
+                    if (cleanId === "主桌" || String(tObj.table_name).includes("主桌")) {
+                        tableNameText = "主桌";
                     } else {
-                        tableNameText = cleanId + "桌(" + tObj.table_name + ")"; // 呈現如：1桌(女方親友1)
+                        tableNameText = cleanId + "桌(" + tObj.table_name + ")"; 
                     }
                 } else {
-                    tableNameText = guest.table + "桌";
+                    tableNameText = guest.table + "桌(未配置)";
                 }
 
                 let buttonHTML = isChecked 
@@ -261,36 +243,28 @@
             try {
                 const response = await fetch(API_URL, {
                     method: "POST",
-                    body: JSON.stringify({ 
-                        id: id,
-                        action: shouldCheckIn ? "checkin" : "cancel"
-                    })
+                    body: JSON.stringify({ id: id, action: shouldCheckIn ? "checkin" : "cancel" })
                 });
                 const result = await response.json();
                 
-                if (result.success) {
-                    if (shouldCheckIn) {
-                        document.getElementById("search-input").value = "";
-                        
-                        const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(guest.table).replace(".0", "").trim());
-                        let modalTableText = guest.table + "桌";
-                        if (tObj) {
-                            modalTableText = String(tObj.table_id).includes("主桌") || String(tObj.table_name).includes("主桌")
-                                ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")";
-                        }
-
-                        document.getElementById("modal-name").innerText = guest.name;
-                        document.getElementById("modal-table").innerText = modalTableText;
-                        
-                        const modal = document.getElementById("success-modal");
-                        modal.classList.remove("hidden");
-                        modal.classList.add("flex");
-
-                        highlightTable(guest.table);
+                if (result.success && shouldCheckIn) {
+                    document.getElementById("search-input").value = "";
+                    const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(guest.table).replace(".0", "").trim());
+                    
+                    let modalTableText = guest.table + "桌";
+                    if (tObj) {
+                        modalTableText = String(tObj.table_id).includes("主桌") || String(tObj.table_name).includes("主桌")
+                            ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")";
                     }
-                } else {
-                    alert("後台更新失敗：" + result.message);
-                    await fetchGuests();
+
+                    document.getElementById("modal-name").innerText = guest.name;
+                    document.getElementById("modal-table").innerText = modalTableText;
+                    
+                    const modal = document.getElementById("success-modal");
+                    modal.classList.remove("hidden");
+                    modal.classList.add("flex");
+
+                    highlightTable(guest.table);
                 }
             } catch (error) {
                 console.error("請求失敗:", error);
@@ -303,9 +277,7 @@
             document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
             const cleanId = String(tableId).replace(".0", "").trim();
             const targetTable = document.getElementById("table-" + cleanId);
-            if (targetTable) {
-                targetTable.classList.add("table-active");
-            }
+            if (targetTable) targetTable.classList.add("table-active");
         }
 
         document.addEventListener("click", (e) => {
