@@ -91,7 +91,15 @@
         let guests = [];
         let tables = [];
 
-        // 【核心防呆優化】不再被動等待事件，代碼下載完直接強制啟動系統！
+        // 【新增：響應式重繪監聽】當視窗（手機）调整大小時，自動重新繪製座位圖，應用優化後的導引線路徑
+        window.addEventListener('resize', () => {
+            // 清除舊的畫布內容，防止 SVG 堆疊
+            const floorPlanContainer = document.getElementById("floor-plan");
+            if (floorPlanContainer) floorPlanContainer.innerHTML = "";
+            renderFloorPlan();
+        });
+
+        // 【核心防霸工優化】不在被動等待 DOMContentLoaded 事件，代碼下載完直接強制啟動系統！
         initSystem();
 
         async function initSystem() {
@@ -138,7 +146,24 @@
             lineWrapper.style.overflow = "visible"; 
             
             const path = document.createElementNS(svgNamespace, "path");
-            path.setAttribute("d", "M 20 50 L 80 50 L 80 100");
+
+            // ========================================================
+            // 【關鍵修正：響應式導引線路徑】
+            // 1. 預設為桌面版路徑：左起點在 (20, 50)，如 image_5.png 所示很好。
+            let pathD = "M 20 50 L 80 50 L 80 100";
+            
+            // 2. 檢測屏幕寬度。lg 斷點通常是 1024px。
+            const isMobileOrTablet = window.matchMedia('(max-width: 1023px)').matches;
+            
+            if (isMobileOrTablet) {
+                // 3. 在手機/平板上，將起點從 20% 向右移動到 28%，遠離主桌，消滅接觸感。
+                // 確保桌面版（寬螢幕）保持原樣，如 image_5.png。
+                pathD = "M 28 50 L 80 50 L 80 100";
+            }
+            // ========================================================
+            
+            path.setAttribute("d", pathD); // 應用響應式路徑
+            
             path.setAttribute("fill", "none");
             path.setAttribute("stroke", "#fb923c"); 
             path.setAttribute("stroke-width", "8");  
