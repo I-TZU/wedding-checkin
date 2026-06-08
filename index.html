@@ -91,7 +91,10 @@
         let guests = [];
         let tables = [];
 
-        document.addEventListener("DOMContentLoaded", async () => {
+        // 【核心防呆優化】不再被動等待事件，代碼下載完直接強制啟動系統！
+        initSystem();
+
+        async function initSystem() {
             await fetchGuests();
             
             document.getElementById("search-input").addEventListener("input", (e) => {
@@ -99,7 +102,7 @@
                 const filtered = guests.filter(g => g.name.includes(keyword));
                 renderList(filtered);
             });
-        });
+        }
 
         async function fetchGuests() {
             try {
@@ -277,4 +280,44 @@
 
                     highlightTable(guest.table);
                 }
-            } catch
+            } catch (error) {
+                console.error("請求失敗:", error);
+                alert("網路連線異常，簽到狀態同步失敗！");
+                await fetchGuests();
+            }
+        }
+
+        function highlightTable(tableId) {
+            document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            const cleanId = String(tableId).replace(".0", "").trim();
+            const targetTable = document.getElementById("table-" + cleanId);
+            if (targetTable) targetTable.classList.add("table-active");
+        }
+
+        document.addEventListener("click", (e) => {
+            if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal")) {
+                document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            }
+        });
+
+        function closeModal() {
+            const modal = document.getElementById("success-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function renderDashboard() {
+            const total = guests.length;
+            const checked = guests.filter(g => g.status === "已報到").length;
+            const unchecked = total - checked;
+            const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+            document.getElementById("total-count").innerText = total;
+            document.getElementById("checked-count").innerText = checked;
+            document.getElementById("unchecked-count").innerText = unchecked;
+            document.getElementById("progress-bar").style.width = percentage + "%";
+            document.getElementById("progress-text").innerText = "目前報到率：" + percentage + "%";
+        }
+    </script>
+</body>
+</html>
