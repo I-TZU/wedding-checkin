@@ -129,7 +129,7 @@
             floorPlanContainer.className = "w-full h-full grid grid-cols-5 grid-rows-4 gap-2 md:gap-4 p-2 relative";
 
             // 【關鍵修正：一體化透明度容器】橫線與直線合併在同一個 opacity-40 容器中，拐角完美交疊，透明度絕對均一！
-            const lineWrapper = document.createElement("div");
+            /*const lineWrapper = document.createElement("div");
             lineWrapper.className = "absolute inset-0 z-0 pointer-events-none opacity-40";
 
             const lineH = document.createElement("div");
@@ -142,6 +142,31 @@
             lineV.className = "bg-orange-400 rounded-b-full shadow-sm";
             lineWrapper.appendChild(lineV);
 
+            floorPlanContainer.appendChild(lineWrapper);*/
+
+            // 1. 建立一體化 SVG 容器
+            const svgNamespace = "http://www.w3.org/2000/svg";
+            const lineWrapper = document.createElementNS(svgNamespace, "svg");
+            lineWrapper.setAttribute("class", "absolute inset-0 z-0 pointer-events-none opacity-40 w-full h-full");
+            // 使用 100x100 的虛擬網格，方便對齊百分比座標
+            lineWrapper.setAttribute("viewBox", "0 0 100 100");
+            lineWrapper.setAttribute("preserveAspectRatio", "none");
+            
+            // 2. 建立單一連續的 L 型路徑
+            const path = document.createElementNS(svgNamespace, "path");
+            // M 20 50 (起點) -> L 80 50 (轉角) -> L 80 100 (終點)
+            path.setAttribute("d", "M 20 50 L 80 50 L 80 100");
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "#fb923c"); // Tailwind 的 bg-orange-400 顏色
+            
+            // 3. 關鍵：控制線條粗細與完美的圓角效果
+            path.setAttribute("stroke-width", "8");
+            path.setAttribute("stroke-linecap", "round");   // 讓兩端端點變成完美圓頭
+            path.setAttribute("stroke-linejoin", "round");  // 核心修正：讓交界轉彎處自動生成完美圓角！
+            path.setAttribute("vector-effect", "non-scaling-stroke"); // 防止線條因外層容器拉伸而變形扭曲
+            
+            // 4. 掛載到畫面上
+            lineWrapper.appendChild(path);
             floorPlanContainer.appendChild(lineWrapper);
 
             // 網格座標精準映射表 (完全對齊平面圖)
