@@ -144,28 +144,37 @@
 
             floorPlanContainer.appendChild(lineWrapper);*/
 
-            // 1. 建立一體化 SVG 容器
+            // 【最終完美修正版：SVG 一體化導引線】
+            // 解決方案：單一 SVG 路徑，並強制開啟 overflow 避免圓角端點被瀏覽器切平。
+            
             const svgNamespace = "http://www.w3.org/2000/svg";
             const lineWrapper = document.createElementNS(svgNamespace, "svg");
+            
+            // 1. 設定 SVG 畫布容器
             lineWrapper.setAttribute("class", "absolute inset-0 z-0 pointer-events-none opacity-40 w-full h-full");
-            // 使用 100x100 的虛擬網格，方便對齊百分比座標
             lineWrapper.setAttribute("viewBox", "0 0 100 100");
             lineWrapper.setAttribute("preserveAspectRatio", "none");
             
-            // 2. 建立單一連續的 L 型路徑
+            // 核心修正 1：允許內容溢出！防止底部半圓形因超出畫布邊界而被切成平頭
+            lineWrapper.style.overflow = "visible"; 
+            
+            // 2. 建立單一連續的 L 型路徑 (M 起點 -> L 轉角 -> L 終點)
             const path = document.createElementNS(svgNamespace, "path");
-            // M 20 50 (起點) -> L 80 50 (轉角) -> L 80 100 (終點)
             path.setAttribute("d", "M 20 50 L 80 50 L 80 100");
             path.setAttribute("fill", "none");
             path.setAttribute("stroke", "#fb923c"); // Tailwind 的 bg-orange-400 顏色
+            path.setAttribute("stroke-width", "8");  // 線條粗細
             
-            // 3. 關鍵：控制線條粗細與完美的圓角效果
-            path.setAttribute("stroke-width", "8");
-            path.setAttribute("stroke-linecap", "round");   // 讓兩端端點變成完美圓頭
-            path.setAttribute("stroke-linejoin", "round");  // 核心修正：讓交界轉彎處自動生成完美圓角！
-            path.setAttribute("vector-effect", "non-scaling-stroke"); // 防止線條因外層容器拉伸而變形扭曲
+            // 核心修正 2：讓轉彎交界處自動生成完美圓角
+            path.setAttribute("stroke-linejoin", "round");
             
-            // 4. 掛載到畫面上
+            // 核心修正 3：讓兩端結尾（主桌旁、紅圈處）自動變成完美圓頭
+            path.setAttribute("stroke-linecap", "round");
+            
+            // 3. 確保線條粗細不會因為容器被拉長拉扁而變形
+            path.setAttribute("vector-effect", "non-scaling-stroke");
+            
+            // 4. 將路徑掛載到畫面中
             lineWrapper.appendChild(path);
             floorPlanContainer.appendChild(lineWrapper);
 
