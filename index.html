@@ -19,7 +19,7 @@
     <div class="w-full mx-auto px-1 md:px-4">
         <header class="text-center mb-5">
             <h1 class="text-3xl font-bold text-stone-800 mb-1">✨ Our Wedding Guest Check-In ✨</h1>
-            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統</p>
+            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統 (群組獨立取消版)</p>
         </header>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200 mb-5">
@@ -91,13 +91,28 @@
         </div>
     </div>
 
+    <div id="group-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50 transition-opacity duration-300">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl transform scale-95 transition-transform duration-300 flex flex-col">
+            <h3 class="text-xl font-bold text-stone-800 mb-1">👥 家族/群組聯合報到</h3>
+            <p class="text-sm text-stone-500 mb-4">請勾選本次現場「實際到場」的成員：</p>
+            
+            <div id="group-member-list" class="space-y-2.5 max-h-[260px] overflow-y-auto mb-5 pr-1">
+                </div>
+            
+            <div class="flex gap-3">
+                <button onclick="closeGroupModal()" class="flex-1 bg-stone-100 text-stone-600 py-3 rounded-xl font-medium hover:bg-stone-200 transition">取消</button>
+                <button onclick="submitGroupCheckIn()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-medium shadow-sm transition">確認報到</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // 💡 核心修改：請在這裡換上你剛剛在第一步中複製的、最新的 API 網址！
         const API_URL = "https://script.google.com/macros/s/AKfycbzjNib56lrJMKki__XWhkOjiDOJn3a1sDkH8TveFQ8D4KSkjWJ394WnwwhDwsS2gkHd/exec"; 
 
         let guests = [];
         let tables = [];
         let html5QrCode = null;
+        let currentGroupMembers = [];
 
         initSystem();
 
@@ -112,7 +127,6 @@
 
         async function fetchGuests() {
             try {
-                // 核心防呆：加上時間戳記，迫使瀏覽器吐出全新網路請求，不准吃舊快取
                 const cacheBuster = "?_=" + new Date().getTime();
                 const response = await fetch(API_URL + cacheBuster);
                 const resData = await response.json();
@@ -152,14 +166,7 @@
             const guest = guests.find(g => Number(g.id) === targetId);
             if (!guest) { alert("⚠️ 查無此賓客編號"); return; }
             closeScanner();
-
-            if (guest.status === "已報到") {
-                const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(guest.table).replace(".0", "").trim());
-                alert("📢 【" + guest.name + "】先前已完成報到囉！\n座位：" + (tObj ? tObj.table_id + "桌(" + tObj.table_name + ")" : guest.table + "桌"));
-                highlightTable(guest.table);
-            } else {
-                toggleCheckIn(targetId, true);
-            }
+            handleCheckInInit(targetId);
         }
 
         async function closeScanner() {
@@ -218,35 +225,154 @@
                 const isChecked = guest.status === "已報到";
                 const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim().toLowerCase() === String(guest.table).replace(".0", "").trim().toLowerCase());
                 let tableNameText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
+                
                 let buttonHTML = isChecked 
-                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn(' + guest.id + ', false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
-                    : '<button onclick="toggleCheckIn(' + guest.id + ', true)" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
+                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
+                    : '<button onclick="handleCheckInInit(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
+                
                 item.innerHTML = '<div><span class="text-lg font-medium text-stone-800">' + guest.name + '</span><span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2.5 py-1 rounded-full font-medium">' + tableNameText + '</span></div><div>' + buttonHTML + '</div>';
                 listContainer.appendChild(item);
             });
         }
 
-        async function toggleCheckIn(id, shouldCheckIn) {
-            const guest = guests.find(g => g.id === id);
+        function handleCheckInInit(id) {
+            const guest = guests.find(g => Number(g.id) === Number(id));
             if (!guest) return;
-            guest.status = shouldCheckIn ? "已報到" : "未報到";
-            renderDashboard(); renderList(guests);
+
+            const gid = String(guest.groupId || '').trim();
+            if (gid === "") {
+                toggleCheckIn([guest.id], true);
+                return;
+            }
+
+            const groupMembers = guests.filter(g => String(g.groupId || '').trim() === gid);
+            
+            if (groupMembers.length <= 1) {
+                toggleCheckIn([guest.id], true);
+            } else {
+                openGroupModal(groupMembers, guest);
+            }
+        }
+
+        function openGroupModal(members, triggerGuest) {
+            currentGroupMembers = members;
+            const container = document.getElementById("group-member-list");
+            container.innerHTML = "";
+            
+            members.forEach(m => {
+                const div = document.createElement("div");
+                const isCheckedIn = m.status === "已報到";
+                const checkboxId = `chk-member-${m.id}`;
+                
+                if (isCheckedIn) {
+                    // 💡 已到場的家人：不提供集體 Checkbox，但提供獨立精準的「取消報到」逃生按鈕
+                    div.className = "flex items-center justify-between bg-stone-50 p-3 rounded-xl border border-stone-200";
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-5 h-5 flex items-center justify-center text-emerald-600 font-bold shrink-0">✓</div>
+                            <div class="text-left flex-1 min-w-0">
+                                <span class="font-medium text-stone-500 text-base block truncate">${m.name}</span>
+                                <span class="text-xs text-stone-400 block mt-0.5">座位：${m.table}桌 (已在場)</span>
+                            </div>
+                            <button onclick="toggleCheckIn([${m.id}], false); closeGroupModal();" 
+                                    class="text-xs text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition shrink-0 font-medium">
+                                取消報到
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // 💡 未到場的家人（或本次遲到剛到的人）：亮白底勾選方格。
+                    // 貼心體驗：如果是招待手動點選進來的那個人，預設打勾。
+                    const shouldAutoCheck = (Number(m.id) === Number(triggerGuest.id));
+                    
+                    div.className = "flex items-center justify-between bg-white p-3 rounded-xl border border-stone-200 hover:border-rose-200 transition";
+                    div.innerHTML = `
+                        <label for="${checkboxId}" class="flex items-center gap-3 cursor-pointer flex-1 py-1 w-full">
+                            <input type="checkbox" id="${checkboxId}" value="${m.id}" ${shouldAutoCheck ? 'checked' : ''} 
+                                   class="w-5 h-5 text-rose-500 border-stone-300 rounded focus:ring-rose-400 accent-rose-500 shrink-0">
+                            <div class="text-left flex-1 min-w-0">
+                                <span class="font-medium text-stone-800 text-base block truncate">${m.name}</span>
+                                <span class="text-xs text-stone-400 block mt-0.5">座位：${m.table}桌</span>
+                            </div>
+                        </label>
+                    `;
+                }
+                container.appendChild(div);
+            });
+            
+            const modal = document.getElementById("group-modal");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function closeGroupModal() {
+            const modal = document.getElementById("group-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function submitGroupCheckIn() {
+            const container = document.getElementById("group-member-list");
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+            const checkedIds = [];
+            
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    checkedIds.push(Number(cb.value));
+                }
+            });
+            
+            if (checkedIds.length === 0) {
+                alert("⚠️ 請至少勾選一位實際到場的親友！");
+                return;
+            }
+            
+            closeGroupModal();
+            toggleCheckIn(checkedIds, true);
+        }
+
+        async function toggleCheckIn(ids, shouldCheckIn) {
+            ids.forEach(id => {
+                const guest = guests.find(g => Number(g.id) === Number(id));
+                if (guest) guest.status = shouldCheckIn ? "已報到" : "未報到";
+            });
+            
+            renderDashboard(); 
+            renderList(guests);
+            
             if (!shouldCheckIn) document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
 
             try {
-                const response = await fetch(API_URL, { method: "POST", body: JSON.stringify({ id: id, action: shouldCheckIn ? "checkin" : "cancel" }) });
+                const response = await fetch(API_URL, { 
+                    method: "POST", 
+                    body: JSON.stringify({ ids: ids, action: shouldCheckIn ? "checkin" : "cancel" }) 
+                });
                 const result = await response.json();
+                
                 if (result.success && shouldCheckIn) {
                     document.getElementById("search-input").value = "";
-                    const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(guest.table).replace(".0", "").trim());
-                    document.getElementById("modal-name").innerText = guest.name;
-                    document.getElementById("modal-table").innerText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
-                    const modal = document.getElementById("success-modal");
-                    modal.classList.remove("hidden"); modal.classList.add("flex");
-                    highlightTable(guest.table);
+                    const firstGuest = guests.find(g => Number(g.id) === Number(ids[0]));
+                    if (firstGuest) {
+                        const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(firstGuest.table).replace(".0", "").trim());
+                        
+                        let displayName = firstGuest.name;
+                        if (ids.length > 1) {
+                            displayName += " 等 " + ids.length + " 人";
+                        }
+                        
+                        document.getElementById("modal-name").innerText = displayName;
+                        document.getElementById("modal-table").innerText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : firstGuest.table + "桌";
+                        
+                        const modal = document.getElementById("success-modal");
+                        modal.classList.remove("hidden"); 
+                        modal.classList.add("flex");
+                        
+                        highlightTable(firstGuest.table);
+                    }
                 }
             } catch (error) {
-                alert("狀態同步失敗！"); fetchGuests();
+                alert("⚠️ 狀態即時同步失敗，請檢查網路連線！"); 
+                fetchGuests(); 
             }
         }
 
@@ -257,11 +383,11 @@
         }
 
         document.addEventListener("click", (e) => {
-            if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal") && !e.target.closest("#scanner-modal")) {
+            if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal") && !e.target.closest("#scanner-modal") && !e.target.closest("#group-modal")) {
                 document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
             }
         });
-         Kakao = { closeModal: function() { document.getElementById("success-modal").classList.add("hidden"); } };
+        
         function closeModal() { document.getElementById("success-modal").classList.add("hidden"); document.getElementById("success-modal").classList.remove("flex"); }
 
         function renderDashboard() {
