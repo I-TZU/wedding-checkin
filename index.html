@@ -109,7 +109,6 @@
     </div>
 
     <script>
-        // 💡 核心配置：換上你最新部署的 GAS 網頁應用程式網址！
         const API_URL = "https://script.google.com/macros/s/AKfycbzjNib56lrJMKki__XWhkOjiDOJn3a1sDkH8TveFQ8D4KSkjWJ394WnwwhDwsS2gkHd/exec"; 
 
         let guests = [];
@@ -238,7 +237,6 @@
             });
         }
 
-        // 核心業務函數：判定是個人簽到還是家族聯合簽到
         function handleCheckInInit(id) {
             const guest = guests.find(g => Number(g.id) === Number(id));
             if (!guest) return;
@@ -258,17 +256,14 @@
             }
         }
 
-        // 智慧型群組視窗：支援「個別獨立取消」與「分桌黃金警告橫幅」
         function openGroupModal(members, triggerGuest) {
             currentGroupMembers = members;
             const container = document.getElementById("group-member-list");
             container.innerHTML = "";
             
-            // 偵測此家族是否被分桌次
             const uniqueTables = [...new Set(members.map(m => String(m.table).replace(".0", "").trim()))];
             const isSplitTable = uniqueTables.length > 1;
             
-            // 如果發現家族內有不同桌次，在最上方跳出亮橘色警告橫幅
             if (isSplitTable) {
                 const alertBanner = document.createElement("div");
                 alertBanner.className = "bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs flex items-center gap-2 mb-3 font-medium animate-pulse text-left";
@@ -287,7 +282,6 @@
                 const isCheckedIn = m.status === "已報到";
                 const checkboxId = `chk-member-${m.id}`;
                 
-                // 依據是否坐主桌或分桌，動態套用醒目的 Badge 標籤
                 const cleanTableStr = String(m.table).trim();
                 const isMainTable = cleanTableStr.includes("主桌") || cleanTableStr === "主桌";
                 const tableBadgeStyle = isMainTable 
@@ -295,7 +289,6 @@
                     : (isSplitTable ? "bg-stone-100 text-stone-700 border-stone-300 font-medium px-2 py-0.5 rounded-md text-xs border" : "text-stone-400 text-xs");
 
                 if (isCheckedIn) {
-                    // 已到場的人：左側拿掉勾選框防止誤拔，右側放一個紅色獨立的【取消報到】秒反悔鈕
                     div.className = "flex items-center justify-between bg-stone-50 p-3 rounded-xl border border-stone-200";
                     div.innerHTML = `
                         <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -311,7 +304,6 @@
                         </div>
                     `;
                 } else {
-                    // 未到場的人：亮白色正常多選方格
                     const shouldAutoCheck = (Number(m.id) === Number(triggerGuest.id));
                     
                     div.className = "flex items-center justify-between bg-white p-3 rounded-xl border border-stone-200 hover:border-rose-200 transition";
@@ -360,7 +352,7 @@
             toggleCheckIn(checkedIds, true);
         }
 
-        // 核心同步發送函式：支援分桌明細動態排版
+        // 核心同步發送函式：支援分桌明細動態排版，並驅動多桌同時高亮
         async function toggleCheckIn(ids, shouldCheckIn) {
             ids.forEach(id => {
                 const guest = guests.find(g => Number(g.id) === Number(id));
@@ -370,7 +362,7 @@
             renderDashboard(); 
             renderList(guests);
             
-            if (!shouldCheckIn) document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            if (!shouldCheckIn) highlightTable(null); // 取消報到時，清空所有高亮
 
             try {
                 const response = await fetch(API_URL, { 
@@ -398,7 +390,6 @@
                         const tableContainer = document.getElementById("modal-table-container");
                         
                         if (isSuccessSplit) {
-                            // [分桌成功畫面]：自動渲染出精緻的明細清單小卡
                             let splitHtml = "<span class='text-stone-500 text-sm block mb-2 font-medium text-left'>家族分桌帶位明細：</span>";
                             splitHtml += "<div class='text-left p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-2 max-h-[150px] overflow-y-auto'>";
                             
@@ -417,7 +408,6 @@
                             splitHtml += "</div>";
                             tableContainer.innerHTML = splitHtml;
                         } else {
-                            // 同桌畫面：恢復標準乾淨排版
                             const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(firstGuest.table).replace(".0", "").trim());
                             const cleanTId = String(firstGuest.table).replace(".0", "").trim();
                             const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
@@ -430,7 +420,8 @@
                         modal.classList.remove("hidden"); 
                         modal.classList.add("flex");
                         
-                        highlightTable(firstGuest.table);
+                        // 💡 [關鍵升級修正]：直接將本次簽到的所有目標桌次陣列傳入，驅動整批高亮
+                        highlightTable(targetTables);
                     }
                 }
             } catch (error) {
@@ -439,15 +430,23 @@
             }
         }
 
-        function highlightTable(tableId) {
+        // 💡 [多桌高亮重構]：智慧判定輸入值。無論傳入單一桌號還是桌號陣列，都能一舉全亮！
+        function highlightTable(tableIds) {
+            // 首先清理地圖上所有的舊高亮
             document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
-            const targetTable = document.getElementById("table-" + String(tableId).replace(".0", "").trim());
-            if (targetTable) targetTable.classList.add("table-active");
+            if (!tableIds) return;
+            
+            // 強制封裝成標準陣列進行遍歷
+            const idsArray = Array.isArray(tableIds) ? tableIds : [tableIds];
+            idsArray.forEach(id => {
+                const targetTable = document.getElementById("table-" + String(id).replace(".0", "").trim());
+                if (targetTable) targetTable.classList.add("table-active");
+            });
         }
 
         document.addEventListener("click", (e) => {
             if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal") && !e.target.closest("#scanner-modal") && !e.target.closest("#group-modal")) {
-                document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+                highlightTable(null); // 點擊外圍空白處時清空高亮
             }
         });
         
