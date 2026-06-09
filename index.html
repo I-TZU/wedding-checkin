@@ -157,3 +157,313 @@
             const config = { fps: 10, qrbox: { width: 220, height: 220 } };
             try {
                 await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+            } catch (err) {
+                alert("無法開啟相機，獨立網頁版請確認是否已給予本網站「相機存取權限」！");
+                closeScanner();
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            const targetId = parseInt(decodedText.trim());
+            if (isNaN(targetId)) return;
+            const guest = guests.find(g => Number(g.id) === targetId);
+            if (!guest) { alert("⚠️ 查無此賓客編號"); return; }
+            closeScanner();
+            handleCheckInInit(targetId);
+        }
+
+        async function closeScanner() {
+            document.getElementById("scanner-modal").classList.add("hidden");
+            document.getElementById("scanner-modal").classList.remove("flex");
+            if (html5QrCode) {
+                try { if (html5QrCode.isScanning) { await html5QrCode.stop(); } } catch (err) {}
+                html5QrCode = null;
+            }
+        }
+
+        function renderFloorPlan() {
+            const floorPlanContainer = document.getElementById("floor-plan");
+            floorPlanContainer.innerHTML = ""; 
+            floorPlanContainer.className = "w-full h-full grid grid-cols-5 grid-rows-4 gap-2 md:gap-4 p-2 relative";
+            const svgNamespace = "http://www.w3.org/2000/svg";
+            const lineWrapper = document.createElementNS(svgNamespace, "svg");
+            lineWrapper.setAttribute("class", "absolute inset-0 z-0 pointer-events-none opacity-40 w-full h-full");
+            lineWrapper.setAttribute("viewBox", "0 0 100 100");
+            lineWrapper.setAttribute("preserveAspectRatio", "none");
+            lineWrapper.style.overflow = "visible"; 
+            const path = document.createElementNS(svgNamespace, "path");
+            path.setAttribute("d", "M 20 50 L 80 50 L 80 100");
+            path.setAttribute("fill", "none"); path.setAttribute("stroke", "#fb923c"); path.setAttribute("stroke-width", "8");  
+            path.setAttribute("stroke-linejoin", "round"); path.setAttribute("stroke-linecap", "round"); path.setAttribute("vector-effect", "non-scaling-stroke");
+            lineWrapper.appendChild(path); floorPlanContainer.appendChild(lineWrapper);
+
+            const gridPositions = { "主桌": "grid-row: 2 / span 2; grid-column: 1;", "1": "grid-row: 1; grid-column: 2;", "6": "grid-row: 2; grid-column: 2;", "10": "grid-row: 3; grid-column: 2;", "2": "grid-row: 1; grid-column: 3;", "7": "grid-row: 2; grid-column: 3;", "11": "grid-row: 3; grid-column: 3;", "15": "grid-row: 4; grid-column: 3;", "3": "grid-row: 1; grid-column: 4;", "8": "grid-row: 2; grid-column: 4;", "12": "grid-row: 3; grid-column: 4;", "16": "grid-row: 4; grid-column: 4;", "5": "grid-row: 1; grid-column: 5;", "9": "grid-row: 2; grid-column: 5;", "13": "grid-row: 3; grid-column: 5;", "17": "grid-row: 4; grid-column: 5;" };
+            const colors = ['text-rose-500 bg-rose-50 border-rose-200', 'text-blue-500 bg-blue-50 border-blue-200', 'text-purple-500 bg-purple-50 border-purple-200', 'text-amber-500 bg-amber-50 border-amber-200', 'text-emerald-500 bg-emerald-50 border-emerald-200'];
+
+            tables.forEach((t, index) => {
+                const colorClass = colors[index % colors.length];
+                const tableDiv = document.createElement("div");
+                const cleanId = String(t.table_id).replace(".0", "").trim();
+                tableDiv.id = "table-" + cleanId;
+                let baseStyle = "aspect-square rounded-full flex flex-col items-center justify-center transition-all duration-300 p-1 text-center shadow-sm border bg-white self-center justify-self-center w-full max-w-[72px] md:max-w-[85px] z-20 ";
+                if (cleanId === "主桌" || String(t.table_name).includes("主桌")) {
+                    tableDiv.className = baseStyle + "border-amber-400 ring-4 ring-amber-100 ring-offset-1 font-bold text-amber-800 text-xs md:text-sm scale-110";
+                    tableDiv.innerHTML = '<span>主桌</span>';
+                } else {
+                    tableDiv.className = baseStyle + "border-stone-200 hover:border-stone-400";
+                    tableDiv.innerHTML = '<span class="text-[9px] md:text-[10px] font-bold ' + colorClass + ' border px-1.5 rounded-full mb-0.5">' + cleanId + '</span>' + '<span class="font-bold text-stone-700 text-[10px] md:text-[11px] truncate max-w-full px-0.5">' + t.table_name + '</span>';
+                }
+                const cssPos = gridPositions[cleanId];
+                if (cssPos) { tableDiv.style.cssText = cssPos; floorPlanContainer.appendChild(tableDiv); }
+            });
+        }
+
+        function renderList(data) {
+            const listContainer = document.getElementById("guest-list");
+            listContainer.innerHTML = "";
+            if (data.length === 0) { listContainer.innerHTML = '<p class="text-center text-stone-400 py-8">找不到相符的賓客姓名</p>'; return; }
+            data.forEach(guest => {
+                const item = document.createElement("div");
+                item.className = "flex items-center justify-between py-3.5 transition-colors duration-200";
+                const isChecked = guest.status === "已報到";
+                const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim().toLowerCase() === String(guest.table).replace(".0", "").trim().toLowerCase());
+                let tableNameText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
+                
+                let buttonHTML = isChecked 
+                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
+                    : '<button onclick="handleCheckInInit(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
+                
+                item.innerHTML = '<div><span class="text-lg font-medium text-stone-800">' + guest.name + '</span><span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2.5 py-1 rounded-full font-medium">' + tableNameText + '</span></div><div>' + buttonHTML + '</div>';
+                listContainer.appendChild(item);
+            });
+        }
+
+        // 核心業務函數：判定是個人簽到還是家族聯合簽到
+        function handleCheckInInit(id) {
+            const guest = guests.find(g => Number(g.id) === Number(id));
+            if (!guest) return;
+
+            const gid = String(guest.groupId || '').trim();
+            if (gid === "") {
+                toggleCheckIn([guest.id], true);
+                return;
+            }
+
+            const groupMembers = guests.filter(g => String(g.groupId || '').trim() === gid);
+            
+            if (groupMembers.length <= 1) {
+                toggleCheckIn([guest.id], true);
+            } else {
+                openGroupModal(groupMembers, guest);
+            }
+        }
+
+        // 智慧型群組視窗：支援「個別獨立取消」與「分桌黃金警告橫幅」
+        function openGroupModal(members, triggerGuest) {
+            currentGroupMembers = members;
+            const container = document.getElementById("group-member-list");
+            container.innerHTML = "";
+            
+            // 偵測此家族是否被分桌次
+            const uniqueTables = [...new Set(members.map(m => String(m.table).replace(".0", "").trim()))];
+            const isSplitTable = uniqueTables.length > 1;
+            
+            // 如果發現家族內有不同桌次，在最上方跳出亮橘色警告橫幅
+            if (isSplitTable) {
+                const alertBanner = document.createElement("div");
+                alertBanner.className = "bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs flex items-center gap-2 mb-3 font-medium animate-pulse text-left";
+                alertBanner.innerHTML = `
+                    <span class="text-base">⚠️</span>
+                    <div class="text-left">
+                        <p class="font-bold">注意：此家族成員分開入座不同桌次！</p>
+                        <p class="text-[11px] text-amber-600 mt-0.5">帶位時請務必依據個人下方的專屬桌次進行引導。</p>
+                    </div>
+                `;
+                container.appendChild(alertBanner);
+            }
+            
+            members.forEach(m => {
+                const div = document.createElement("div");
+                const isCheckedIn = m.status === "已報到";
+                const checkboxId = `chk-member-${m.id}`;
+                
+                // 依據是否坐主桌或分桌，動態套用醒目的 Badge 標籤
+                const cleanTableStr = String(m.table).trim();
+                const isMainTable = cleanTableStr.includes("主桌") || cleanTableStr === "主桌";
+                const tableBadgeStyle = isMainTable 
+                    ? "bg-amber-100 text-amber-800 border-amber-300 font-bold px-2 py-0.5 rounded-md text-xs border"
+                    : (isSplitTable ? "bg-stone-100 text-stone-700 border-stone-300 font-medium px-2 py-0.5 rounded-md text-xs border" : "text-stone-400 text-xs");
+
+                if (isCheckedIn) {
+                    // 已到場的人：左側拿掉勾選框防止誤拔，右側放一個紅色獨立的【取消報到】秒反悔鈕
+                    div.className = "flex items-center justify-between bg-stone-50 p-3 rounded-xl border border-stone-200";
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-5 h-5 flex items-center justify-center text-emerald-600 font-bold shrink-0">✓</div>
+                            <div class="text-left flex-1 min-w-0">
+                                <span class="font-medium text-stone-500 text-base block truncate">${m.name}</span>
+                                <span class="${tableBadgeStyle} inline-block mt-1">座位：${cleanTableStr}${isMainTable ? '' : '桌'} (已在場)</span>
+                            </div>
+                            <button onclick="toggleCheckIn([${m.id}], false); closeGroupModal();" 
+                                    class="text-xs text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition shrink-0 font-medium">
+                                取消報到
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // 未到場的人：亮白色正常多選方格
+                    const shouldAutoCheck = (Number(m.id) === Number(triggerGuest.id));
+                    
+                    div.className = "flex items-center justify-between bg-white p-3 rounded-xl border border-stone-200 hover:border-rose-200 transition";
+                    div.innerHTML = `
+                        <label for="${checkboxId}" class="flex items-center gap-3 cursor-pointer flex-1 py-1 w-full">
+                            <input type="checkbox" id="${checkboxId}" value="${m.id}" ${shouldAutoCheck ? 'checked' : ''} 
+                                   class="w-5 h-5 text-rose-500 border-stone-300 rounded focus:ring-rose-400 accent-rose-500 shrink-0">
+                            <div class="text-left flex-1 min-w-0">
+                                <span class="font-medium text-stone-800 text-base block truncate">${m.name}</span>
+                                <span class="${tableBadgeStyle} inline-block mt-1">座位：${cleanTableStr}${isMainTable ? '' : '桌'}</span>
+                            </div>
+                        </label>
+                    `;
+                }
+                container.appendChild(div);
+            });
+            
+            const modal = document.getElementById("group-modal");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function closeGroupModal() {
+            const modal = document.getElementById("group-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function submitGroupCheckIn() {
+            const container = document.getElementById("group-member-list");
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+            const checkedIds = [];
+            
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    checkedIds.push(Number(cb.value));
+                }
+            });
+            
+            if (checkedIds.length === 0) {
+                alert("⚠️ 請至少勾選一位實際到場的親友！");
+                return;
+            }
+            
+            closeGroupModal();
+            toggleCheckIn(checkedIds, true);
+        }
+
+        // 核心同步發送函式：支援分桌明細動態排版
+        async function toggleCheckIn(ids, shouldCheckIn) {
+            ids.forEach(id => {
+                const guest = guests.find(g => Number(g.id) === Number(id));
+                if (guest) guest.status = shouldCheckIn ? "已報到" : "未報到";
+            });
+            
+            renderDashboard(); 
+            renderList(guests);
+            
+            if (!shouldCheckIn) document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+
+            try {
+                const response = await fetch(API_URL, { 
+                    method: "POST", 
+                    body: JSON.stringify({ ids: ids, action: shouldCheckIn ? "checkin" : "cancel" }) 
+                });
+                const result = await response.json();
+                
+                if (result.success && shouldCheckIn) {
+                    document.getElementById("search-input").value = "";
+                    
+                    const checkedGuests = guests.filter(g => ids.includes(Number(g.id)));
+                    const firstGuest = checkedGuests[0];
+                    
+                    if (firstGuest) {
+                        const targetTables = [...new Set(checkedGuests.map(g => String(g.table).replace(".0", "").trim()))];
+                        const isSuccessSplit = targetTables.length > 1;
+                        
+                        let displayName = firstGuest.name;
+                        if (ids.length > 1) {
+                            displayName += " 等 " + ids.length + " 人";
+                        }
+                        document.getElementById("modal-name").innerText = displayName;
+                        
+                        const tableContainer = document.getElementById("modal-table-container");
+                        
+                        if (isSuccessSplit) {
+                            // [分桌成功畫面]：自動渲染出精緻的明細清單小卡
+                            let splitHtml = "<span class='text-stone-500 text-sm block mb-2 font-medium text-left'>家族分桌帶位明細：</span>";
+                            splitHtml += "<div class='text-left p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-2 max-h-[150px] overflow-y-auto'>";
+                            
+                            checkedGuests.forEach(cg => {
+                                const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(cg.table).replace(".0", "").trim());
+                                const cleanTId = String(cg.table).replace(".0", "").trim();
+                                const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
+                                const tNameText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : cg.table + "桌";
+                                
+                                splitHtml += `
+                                    <div class='flex justify-between items-center text-sm border-b border-stone-100 pb-1 last:border-0'>
+                                        <span class='font-medium text-stone-700'>${cg.name}</span>
+                                        <span class='font-bold ${isMain ? "text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" : "text-stone-800 bg-stone-200/60 px-2 py-0.5 rounded"} text-xs'>${tNameText}</span>
+                                    </div>`;
+                            });
+                            splitHtml += "</div>";
+                            tableContainer.innerHTML = splitHtml;
+                        } else {
+                            // 同桌畫面：恢復標準乾淨排版
+                            const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(firstGuest.table).replace(".0", "").trim());
+                            const cleanTId = String(firstGuest.table).replace(".0", "").trim();
+                            const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
+                            const normalTableText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : firstGuest.table + "桌";
+                            
+                            tableContainer.innerHTML = `您的座位在：<span id="modal-table" class="font-bold text-stone-800 bg-amber-100 px-2 py-1 rounded">${normalTableText}</span>`;
+                        }
+                        
+                        const modal = document.getElementById("success-modal");
+                        modal.classList.remove("hidden"); 
+                        modal.classList.add("flex");
+                        
+                        highlightTable(firstGuest.table);
+                    }
+                }
+            } catch (error) {
+                alert("⚠️ 狀態即時同步失敗，請檢查網路連線！"); 
+                fetchGuests(); 
+            }
+        }
+
+        function highlightTable(tableId) {
+            document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            const targetTable = document.getElementById("table-" + String(tableId).replace(".0", "").trim());
+            if (targetTable) targetTable.classList.add("table-active");
+        }
+
+        document.addEventListener("click", (e) => {
+            if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal") && !e.target.closest("#scanner-modal") && !e.target.closest("#group-modal")) {
+                document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
+            }
+        });
+        
+        function closeModal() { document.getElementById("success-modal").classList.add("hidden"); document.getElementById("success-modal").classList.remove("flex"); }
+
+        function renderDashboard() {
+            const total = guests.length;
+            const checked = guests.filter(g => g.status === "已報到").length;
+            const unchecked = total - checked;
+            const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+            document.getElementById("total-count").innerText = total;
+            document.getElementById("checked-count").innerText = checked;
+            document.getElementById("unchecked-count").innerText = unchecked;
+            document.getElementById("progress-bar").style.width = percentage + "%";
+            document.getElementById("progress-text").innerText = "目前報到率：" + percentage + "%";
+        }
+    </script>
+</body>
+</html>
