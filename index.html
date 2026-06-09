@@ -10,6 +10,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         html { overflow-y: scroll; scrollbar-gutter: stable; }
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
+        /* 座位點擊高亮：純紅底紅框，完全不放大，不破壞四周排版 */
         .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
         #reader video { object-fit: cover !important; border-radius: 12px; }
     </style>
@@ -26,7 +27,7 @@
             </div>
 
             <h1 class="text-3xl font-bold text-stone-800 mb-1">✨ Our Wedding Guest Check-In ✨</h1>
-            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統 (離線無損防禦版)</p>
+            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統 (極速鋼鐵防禦版)</p>
         </header>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200 mb-5">
@@ -123,7 +124,7 @@
         let html5QrCode = null;
         let currentGroupMembers = [];
         
-        // 💡 [核心配置] 離線同步佇列（自動初始化或自本地緩存讀取舊進度）
+        // 離線同步佇列（自動初始化或自本地緩存讀取舊進度）
         let syncQueue = JSON.parse(localStorage.getItem("wedding_sync_queue") || "[]");
         let isSyncing = false;
 
@@ -132,18 +133,25 @@
         async function initSystem() {
             await fetchGuests();
             
-            // 啟動排程定時器：每 5 秒在背景悄悄檢查有沒有需要補補上傳的離線資料
+            // 啟動排程定時器：每 5 秒在背景悄悄檢查有沒有需要補傳的離線資料
             setInterval(processSyncQueue, 5000);
             updateSyncBadge();
 
+            // 深度聯動搜尋欄：輸入名字，自動帶出整個家族成員
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
-                if (keyword === "") { renderList(guests); return; }
+                
+                if (keyword === "") {
+                    renderList(guests);
+                    return;
+                }
                 
                 const matchedByName = guests.filter(g => g.name.includes(keyword));
                 const associatedGroupIds = new Set();
                 matchedByName.forEach(g => {
-                    if (g.groupId && String(g.groupId).trim() !== "") { associatedGroupIds.add(String(g.groupId).trim()); }
+                    if (g.groupId && String(g.groupId).trim() !== "") {
+                        associatedGroupIds.add(String(g.groupId).trim());
+                    }
                 });
                 
                 const filtered = guests.filter(g => {
@@ -152,6 +160,7 @@
                     const isGroupMatch = currentGId !== "" && associatedGroupIds.has(currentGId);
                     return isNameMatch || isGroupMatch;
                 });
+                
                 renderList(filtered);
             });
         }
@@ -257,8 +266,9 @@
                 const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim().toLowerCase() === String(guest.table).replace(".0", "").trim().toLowerCase());
                 let tableNameText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
                 
+                // 💡 [修正完畢]：徹底移除導致 SyntaxError 的萬惡多餘單引號
                 let buttonHTML = isChecked 
-                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)'" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
+                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
                     : '<button onclick="handleCheckInInit(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
                 
                 item.innerHTML = '<div><span class="text-lg font-medium text-stone-800">' + guest.name + '</span><span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2.5 py-1 rounded-full font-medium">' + tableNameText + '</span></div><div>' + buttonHTML + '</div>';
@@ -355,6 +365,7 @@
             modal.classList.add("flex");
         }
 
+        // 💡 [修正完畢]：清空原先殘留錯誤的 modal.add 賦值
         function closeGroupModal() {
             const modal = document.getElementById("group-modal");
             modal.classList.add("hidden");
@@ -379,9 +390,8 @@
             toggleCheckIn(checkedIds, true);
         }
 
-        // 🧠 終極防禦演算法：樂觀回應 + 離線佇列機制
+        // 樂觀更新 + 離線安全貯列演算法
         async function toggleCheckIn(ids, shouldCheckIn) {
-            // 1. 【樂觀更新】0 延遲瞬間在本地平板更新狀態與 UI
             ids.forEach(id => {
                 const guest = guests.find(g => Number(g.id) === Number(id));
                 if (guest) guest.status = shouldCheckIn ? "已報到" : "未報到";
@@ -441,21 +451,17 @@
                 }
             }
 
-            // 2. 【離線緩存策略】不原地等待網路結果，直接把任務塞進暫存箱，並立即更新持久化緩存
             syncQueue.push({ ids: ids, action: shouldCheckIn ? "checkin" : "cancel" });
             localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
             
-            // 3. 立即觸發一次非阻塞的背景雲端對齊
             processSyncQueue();
         }
 
-        // 🔄 背景同步核心進程：逐條消化暫存箱，Wi-Fi 壞掉時自動卡住，等網路通了自動批次補補傳！
         async function processSyncQueue() {
             if (isSyncing || syncQueue.length === 0) { updateSyncBadge(); return; }
             isSyncing = true;
             updateSyncBadge();
 
-            // 抓出排隊中的第一筆報到任務
             const task = syncQueue[0];
 
             try {
@@ -466,20 +472,17 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // 寫入雲端成功！將這筆任務從排隊清單中剔除
                     syncQueue.shift();
                     localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
                 }
             } catch (error) {
-                console.log("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
-                // 💡 核心防丟機制：如果不幸斷線，不使用 shift 移除它，它會安全地留在 local 暫存箱，等下一次 5 秒定時器重試！
+                print("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
             } finally {
                 isSyncing = false;
-                updateSyncBadge(); // 隨時重刷頂端狀態燈
+                updateSyncBadge();
             }
         }
 
-        // 🚦 智慧同步狀態小燈更新器
         function updateSyncBadge() {
             const badge = document.getElementById("sync-status-badge");
             const text = document.getElementById("sync-status-text");
