@@ -10,7 +10,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         html { overflow-y: scroll; scrollbar-gutter: stable; }
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
-        /* 💡 [修改點 1]：移除了 transform: scale(1.15) !important; 保持原本大小，僅亮起紅底紅框與陰影 */
         .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
         #reader video { object-fit: cover !important; border-radius: 12px; }
     </style>
@@ -18,9 +17,16 @@
 <body class="p-2 md:p-4">
 
     <div class="w-full mx-auto px-1 md:px-4">
-        <header class="text-center mb-5">
+        <header class="text-center mb-5 relative">
+            <div class="md:absolute md:top-2 md:right-4 flex justify-center mb-2 md:mb-0">
+                <div id="sync-status-badge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 block animate-pulse"></span>
+                    <span id="sync-status-text">雲端連線正常</span>
+                </div>
+            </div>
+
             <h1 class="text-3xl font-bold text-stone-800 mb-1">✨ Our Wedding Guest Check-In ✨</h1>
-            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統 (終極家族分桌優化版)</p>
+            <p class="text-stone-500 text-sm">婚禮現場賓客報到與座位查詢系統 (離線無損防禦版)</p>
         </header>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200 mb-5">
@@ -116,40 +122,36 @@
         let tables = [];
         let html5QrCode = null;
         let currentGroupMembers = [];
+        
+        // 💡 [核心配置] 離線同步佇列（自動初始化或自本地緩存讀取舊進度）
+        let syncQueue = JSON.parse(localStorage.getItem("wedding_sync_queue") || "[]");
+        let isSyncing = false;
 
         initSystem();
 
         async function initSystem() {
             await fetchGuests();
             
-            // 💡 [修改點 2]：重構搜尋欄輸入監聽器，導入家族群組深度關聯
+            // 啟動排程定時器：每 5 秒在背景悄悄檢查有沒有需要補補上傳的離線資料
+            setInterval(processSyncQueue, 5000);
+            updateSyncBadge();
+
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
+                if (keyword === "") { renderList(guests); return; }
                 
-                if (keyword === "") {
-                    renderList(guests);
-                    return;
-                }
-                
-                // 1. 先找出名字包含關鍵字的所有賓客
                 const matchedByName = guests.filter(g => g.name.includes(keyword));
-                
-                // 2. 收集這些賓客的所有群組 ID (過濾掉空值)
                 const associatedGroupIds = new Set();
                 matchedByName.forEach(g => {
-                    if (g.groupId && String(g.groupId).trim() !== "") {
-                        associatedGroupIds.add(String(g.groupId).trim());
-                    }
+                    if (g.groupId && String(g.groupId).trim() !== "") { associatedGroupIds.add(String(g.groupId).trim()); }
                 });
                 
-                // 3. 重新篩選：只要「名字有中」或者是「屬於上述群組家族成員之一」的，通通打包顯示
                 const filtered = guests.filter(g => {
                     const isNameMatch = g.name.includes(keyword);
                     const currentGId = g.groupId ? String(g.groupId).trim() : "";
                     const isGroupMatch = currentGId !== "" && associatedGroupIds.has(currentGId);
                     return isNameMatch || isGroupMatch;
                 });
-                
                 renderList(filtered);
             });
         }
@@ -256,7 +258,7 @@
                 let tableNameText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
                 
                 let buttonHTML = isChecked 
-                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
+                    ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)'" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
                     : '<button onclick="handleCheckInInit(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
                 
                 item.innerHTML = '<div><span class="text-lg font-medium text-stone-800">' + guest.name + '</span><span class="ml-3 text-xs bg-stone-100 text-stone-600 px-2.5 py-1 rounded-full font-medium">' + tableNameText + '</span></div><div>' + buttonHTML + '</div>';
@@ -365,9 +367,7 @@
             const checkedIds = [];
             
             checkboxes.forEach(cb => {
-                if (cb.checked) {
-                    checkedIds.push(Number(cb.value));
-                }
+                if (cb.checked) { checkedIds.push(Number(cb.value)); }
             });
             
             if (checkedIds.length === 0) {
@@ -379,7 +379,9 @@
             toggleCheckIn(checkedIds, true);
         }
 
+        // 🧠 終極防禦演算法：樂觀回應 + 離線佇列機制
         async function toggleCheckIn(ids, shouldCheckIn) {
+            // 1. 【樂觀更新】0 延遲瞬間在本地平板更新狀態與 UI
             ids.forEach(id => {
                 const guest = guests.find(g => Number(g.id) === Number(id));
                 if (guest) guest.status = shouldCheckIn ? "已報到" : "未報到";
@@ -390,69 +392,107 @@
             
             if (!shouldCheckIn) highlightTable(null); 
 
+            if (shouldCheckIn) {
+                document.getElementById("search-input").value = "";
+                const checkedGuests = guests.filter(g => ids.includes(Number(g.id)));
+                const firstGuest = checkedGuests[0];
+                
+                if (firstGuest) {
+                    const targetTables = [...new Set(checkedGuests.map(g => String(g.table).replace(".0", "").trim()))];
+                    const isSuccessSplit = targetTables.length > 1;
+                    
+                    let displayName = firstGuest.name;
+                    if (ids.length > 1) displayName += " 等 " + ids.length + " 人";
+                    document.getElementById("modal-name").innerText = displayName;
+                    
+                    const tableContainer = document.getElementById("modal-table-container");
+                    
+                    if (isSuccessSplit) {
+                        let splitHtml = "<span class='text-stone-500 text-sm block mb-2 font-medium text-left'>家族分桌帶位明細：</span>";
+                        splitHtml += "<div class='text-left p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-2 max-h-[150px] overflow-y-auto'>";
+                        
+                        checkedGuests.forEach(cg => {
+                            const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(cg.table).replace(".0", "").trim());
+                            const cleanTId = String(cg.table).replace(".0", "").trim();
+                            const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
+                            const tNameText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : cg.table + "桌";
+                            
+                            splitHtml += `
+                                <div class='flex justify-between items-center text-sm border-b border-stone-100 pb-1 last:border-0'>
+                                    <span class='font-medium text-stone-700'>${cg.name}</span>
+                                    <span class='font-bold ${isMain ? "text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" : "text-stone-800 bg-stone-200/60 px-2 py-0.5 rounded"} text-xs'>${tNameText}</span>
+                                </div>`;
+                        });
+                        splitHtml += "</div>";
+                        tableContainer.innerHTML = splitHtml;
+                    } else {
+                        const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(firstGuest.table).replace(".0", "").trim());
+                        const cleanTId = String(firstGuest.table).replace(".0", "").trim();
+                        const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
+                        const normalTableText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : firstGuest.table + "桌";
+                        
+                        tableContainer.innerHTML = `您的座位在：<span id="modal-table" class="font-bold text-stone-800 bg-amber-100 px-2 py-1 rounded">${normalTableText}</span>`;
+                    }
+                    
+                    const modal = document.getElementById("success-modal");
+                    modal.classList.remove("hidden"); 
+                    modal.classList.add("flex");
+                    highlightTable(targetTables);
+                }
+            }
+
+            // 2. 【離線緩存策略】不原地等待網路結果，直接把任務塞進暫存箱，並立即更新持久化緩存
+            syncQueue.push({ ids: ids, action: shouldCheckIn ? "checkin" : "cancel" });
+            localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
+            
+            // 3. 立即觸發一次非阻塞的背景雲端對齊
+            processSyncQueue();
+        }
+
+        // 🔄 背景同步核心進程：逐條消化暫存箱，Wi-Fi 壞掉時自動卡住，等網路通了自動批次補補傳！
+        async function processSyncQueue() {
+            if (isSyncing || syncQueue.length === 0) { updateSyncBadge(); return; }
+            isSyncing = true;
+            updateSyncBadge();
+
+            // 抓出排隊中的第一筆報到任務
+            const task = syncQueue[0];
+
             try {
                 const response = await fetch(API_URL, { 
                     method: "POST", 
-                    body: JSON.stringify({ ids: ids, action: shouldCheckIn ? "checkin" : "cancel" }) 
+                    body: JSON.stringify({ ids: task.ids, action: task.action }) 
                 });
                 const result = await response.json();
                 
-                if (result.success && shouldCheckIn) {
-                    document.getElementById("search-input").value = "";
-                    
-                    const checkedGuests = guests.filter(g => ids.includes(Number(g.id)));
-                    const firstGuest = checkedGuests[0];
-                    
-                    if (firstGuest) {
-                        const targetTables = [...new Set(checkedGuests.map(g => String(g.table).replace(".0", "").trim()))];
-                        const isSuccessSplit = targetTables.length > 1;
-                        
-                        let displayName = firstGuest.name;
-                        if (ids.length > 1) {
-                            displayName += " 等 " + ids.length + " 人";
-                        }
-                        document.getElementById("modal-name").innerText = displayName;
-                        
-                        const tableContainer = document.getElementById("modal-table-container");
-                        
-                        if (isSuccessSplit) {
-                            let splitHtml = "<span class='text-stone-500 text-sm block mb-2 font-medium text-left'>家族分桌帶位明細：</span>";
-                            splitHtml += "<div class='text-left p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-2 max-h-[150px] overflow-y-auto'>";
-                            
-                            checkedGuests.forEach(cg => {
-                                const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(cg.table).replace(".0", "").trim());
-                                const cleanTId = String(cg.table).replace(".0", "").trim();
-                                const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
-                                const tNameText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : cg.table + "桌";
-                                
-                                splitHtml += `
-                                    <div class='flex justify-between items-center text-sm border-b border-stone-100 pb-1 last:border-0'>
-                                        <span class='font-medium text-stone-700'>${cg.name}</span>
-                                        <span class='font-bold ${isMain ? "text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" : "text-stone-800 bg-stone-200/60 px-2 py-0.5 rounded"} text-xs'>${tNameText}</span>
-                                    </div>`;
-                            });
-                            splitHtml += "</div>";
-                            tableContainer.innerHTML = splitHtml;
-                        } else {
-                            const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim() === String(firstGuest.table).replace(".0", "").trim());
-                            const cleanTId = String(firstGuest.table).replace(".0", "").trim();
-                            const isMain = cleanTId.includes("主桌") || cleanTId === "主桌";
-                            const normalTableText = tObj ? (isMain ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : firstGuest.table + "桌";
-                            
-                            tableContainer.innerHTML = `您的座位在：<span id="modal-table" class="font-bold text-stone-800 bg-amber-100 px-2 py-1 rounded">${normalTableText}</span>`;
-                        }
-                        
-                        const modal = document.getElementById("success-modal");
-                        modal.classList.remove("hidden"); 
-                        modal.classList.add("flex");
-                        
-                        // 驅動全桌次同步亮起
-                        highlightTable(targetTables);
-                    }
+                if (result.success) {
+                    // 寫入雲端成功！將這筆任務從排隊清單中剔除
+                    syncQueue.shift();
+                    localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
                 }
             } catch (error) {
-                alert("⚠️ 狀態即時同步失敗，請檢查網路連線！"); 
-                fetchGuests(); 
+                console.log("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
+                // 💡 核心防丟機制：如果不幸斷線，不使用 shift 移除它，它會安全地留在 local 暫存箱，等下一次 5 秒定時器重試！
+            } finally {
+                isSyncing = false;
+                updateSyncBadge(); // 隨時重刷頂端狀態燈
+            }
+        }
+
+        // 🚦 智慧同步狀態小燈更新器
+        function updateSyncBadge() {
+            const badge = document.getElementById("sync-status-badge");
+            const text = document.getElementById("sync-status-text");
+            const pendingCount = syncQueue.length;
+
+            if (pendingCount === 0) {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 bg-emerald-50 text-emerald-700 border border-emerald-200";
+                text.innerText = "雲端連線正常";
+                badge.querySelector("span").className = "w-2 h-2 rounded-full bg-emerald-500 block animate-pulse";
+            } else {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 bg-amber-50 text-amber-700 border border-amber-200";
+                text.innerText = `🔄 Background Sync: ${pendingCount} 筆待同步`;
+                badge.querySelector("span").className = "w-2 h-2 rounded-full bg-amber-500 block animate-spin";
             }
         }
 
