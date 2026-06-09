@@ -10,8 +10,27 @@
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         html { overflow-y: scroll; scrollbar-gutter: stable; }
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
-        /* 座位點擊高亮：純紅底紅框，完全不放大，不破壞四周排版 */
-        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
+        
+        /* 💡 [新亮點]：客製化高質感紅色霓虹閃爍呼吸動畫 */
+        @keyframes table-pulse-glow {
+            0%, 100% { 
+                background-color: #fee2e2; /* 柔和淡紅 */
+                border-color: #f87171; 
+                box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1), 0 2px 4px -1px rgba(239, 68, 68, 0.06);
+            }
+            50% { 
+                background-color: #fca5a5; /* 飽和鮮紅 */
+                border-color: #ef4444; 
+                box-shadow: 0 0 15px 4px rgba(239, 68, 68, 0.5); /* 漂亮的紅色霓虹外發光 */
+            }
+        }
+
+        /* 💡 將閃爍動畫綁定至高亮桌次（完全移除了放大 scale 特效，不擋隔壁桌次） */
+        .table-active { 
+            animation: table-pulse-glow 1.2s infinite ease-in-out;
+            z-index: 50; 
+        }
+
         #reader video { object-fit: cover !important; border-radius: 12px; }
     </style>
 </head>
@@ -136,7 +155,7 @@
             setInterval(processSyncQueue, 5000);
             updateSyncBadge();
 
-            // 深度聯動搜尋欄
+            // 深度聯動搜尋欄：輸入姓名自動帶出整個家族
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
                 
@@ -178,7 +197,7 @@
                 guests = resData.guests;
                 tables = resData.tables;
                 renderDashboard();
-                renderList([]); // 初始保持上鎖狀態
+                renderList([]); // 初始保持隱私鎖定
                 renderFloorPlan(); 
             } catch (error) {
                 console.error(error);
@@ -254,7 +273,6 @@
             });
         }
 
-        // 💡 [優化重頭戲]：重構名單渲染器，引進垂直置中佈局與精緻極簡的線條型 SVG
         function renderList(data) {
             const listContainer = document.getElementById("guest-list");
             listContainer.innerHTML = "";
@@ -263,7 +281,7 @@
             
             if (data.length === 0) {
                 if (keyword === "") {
-                    // 🔒 完美幾何置中 ＋ 質感細線安全盾牌 SVG 畫面
+                    // 🔒 隱私置中引導畫面
                     listContainer.innerHTML = `
                         <div class="flex flex-col items-center justify-center h-full text-center p-4">
                             <svg class="w-10 h-10 text-stone-300 mb-2.5" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
@@ -273,7 +291,7 @@
                             <p class="text-[11px] text-stone-400 mt-1 tracking-wider">🔒 隱私安全模式已啟動</p>
                         </div>`;
                 } else {
-                    // ❓ 完美置中的查無此人畫面
+                    // ❓ 查無此人畫面
                     listContainer.innerHTML = `
                         <div class="flex flex-col items-center justify-center h-full text-center p-4">
                             <div class="text-2xl mb-1.5 text-stone-300">🔎</div>
@@ -413,6 +431,7 @@
             toggleCheckIn(checkedIds, true);
         }
 
+        // 樂觀更新 + 離線佇列同步演算法
         async function toggleCheckIn(ids, shouldCheckIn) {
             const oldGuestsState = JSON.parse(JSON.stringify(guests));
 
@@ -424,7 +443,7 @@
             renderDashboard(); 
             
             if (!shouldCheckIn) {
-                renderList([]); // 取消報到時重置回隱私鎖定盾牌
+                renderList([]); // 取消報到時重置回隱私盾牌
                 highlightTable(null); 
             }
 
@@ -473,9 +492,10 @@
                     const modal = document.getElementById("success-modal");
                     modal.classList.remove("hidden"); 
                     modal.classList.add("flex");
+                    
+                    // 驅動所有相關桌次陣列同步亮起閃爍
                     highlightTable(targetTables);
                     
-                    // 成功跳窗後，立刻自動將左側上鎖回歸盾牌畫面
                     renderList([]);
                 }
             }
@@ -505,7 +525,7 @@
                     localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
                 }
             } catch (error) {
-                console.log("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
+                print("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
             } finally {
                 isSyncing = false;
                 updateSyncBadge();
