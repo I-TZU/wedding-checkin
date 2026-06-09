@@ -58,7 +58,7 @@
                 <div class="mb-4 flex items-center gap-2 w-full">
                     <input type="text" id="search-input" placeholder="請輸入賓客姓名（如：王小明）..." 
                            class="w-full min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-rose-300 text-lg">
-                    <button onclick="startScanner()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 h-[46px] rounded-xl flex items-center justify-center shadow-sm transition shrink-0 text-xl" title="開啟相機掃描">📷</button>
+                    <button onclick="startScanner()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 h-[4px] rounded-xl flex items-center justify-center shadow-sm transition shrink-0 text-xl" style="height: 46px;" title="開啟相機掃描">📷</button>
                 </div>
                 
                 <div class="overflow-y-scroll h-[420px] pr-1 divide-y divide-stone-100" id="guest-list">
@@ -133,7 +133,7 @@
         async function initSystem() {
             await fetchGuests();
             
-            // 啟動排程定時器：每 5 秒在背景悄悄檢查有沒有需要補傳的離線資料
+            // 啟動排程定時器：每 5 秒在背景檢查是否有離線待同步資料
             setInterval(processSyncQueue, 5000);
             updateSyncBadge();
 
@@ -141,8 +141,9 @@
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
                 
+                // 💡 [修改點 1]：當搜尋欄被清空時，改為傳遞空陣列，觸發隱私上鎖保護畫面
                 if (keyword === "") {
-                    renderList(guests);
+                    renderList([]);
                     return;
                 }
                 
@@ -179,7 +180,8 @@
                 guests = resData.guests;
                 tables = resData.tables;
                 renderDashboard();
-                renderList(guests);
+                // 💡 [修改點 2]：網頁初始載入完畢後，預設不傳入完整名單，保持隱私鎖定狀態
+                renderList([]);
                 renderFloorPlan(); 
             } catch (error) {
                 console.error(error);
@@ -255,10 +257,34 @@
             });
         }
 
+        // 💡 [修改點 3]：智慧重構名單渲染器，完美融入隱私盾牌引導插畫樣式
         function renderList(data) {
             const listContainer = document.getElementById("guest-list");
             listContainer.innerHTML = "";
-            if (data.length === 0) { listContainer.innerHTML = '<p class="text-center text-stone-400 py-8">找不到相符的賓客姓名</p>'; return; }
+            
+            const keyword = document.getElementById("search-input").value.trim();
+            
+            if (data.length === 0) {
+                if (keyword === "") {
+                    // 🔒 預設隱私鎖定畫面：極具質感的引導 UI
+                    listContainer.innerHTML = `
+                        <div class="text-center text-stone-400 py-16 px-4">
+                            <div class="text-4xl mb-3 animate-bounce">✨</div>
+                            <p class="font-medium text-stone-600 text-base">請輸入賓客姓名或開啟相機掃碼</p>
+                            <p class="text-xs text-stone-400 mt-1.5 bg-stone-50 rounded-lg py-1 px-2 inline-block border border-stone-100">🔒 系統已啟用隱私安全防禦保護名單</p>
+                        </div>`;
+                } else {
+                    // 查無此人畫面
+                    listContainer.innerHTML = `
+                        <div class="text-center text-stone-400 py-16 px-4">
+                            <div class="text-3xl mb-2">❓</div>
+                            <p class="font-medium text-stone-500">找不到相符的賓客姓名</p>
+                            <p class="text-xs text-stone-400 mt-1">請確認字是否有打錯，或嘗試輸入部分關鍵字</p>
+                        </div>`;
+                }
+                return;
+            }
+            
             data.forEach(guest => {
                 const item = document.createElement("div");
                 item.className = "flex items-center justify-between py-3.5 transition-colors duration-200";
@@ -266,7 +292,6 @@
                 const tObj = tables.find(t => String(t.table_id).replace(".0", "").trim().toLowerCase() === String(guest.table).replace(".0", "").trim().toLowerCase());
                 let tableNameText = tObj ? (String(tObj.table_id).includes("主桌") ? "主桌" : tObj.table_id + "桌(" + tObj.table_name + ")") : guest.table + "桌";
                 
-                // 💡 [修正完畢]：徹底移除導致 SyntaxError 的萬惡多餘單引號
                 let buttonHTML = isChecked 
                     ? '<div class="flex items-center gap-2"><span class="text-sm text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1.5 rounded-lg">✓ 已報到</span><button onclick="toggleCheckIn([' + guest.id + '], false)" class="text-xs text-stone-400 bg-stone-100 hover:bg-stone-200 px-2 py-1.5 rounded-lg transition">取消</button></div>'
                     : '<button onclick="handleCheckInInit(' + guest.id + ')" class="text-sm bg-rose-500 text-white px-4 py-1.5 rounded-lg hover:bg-rose-600 font-medium shadow-sm transition">確認報到</button>';
@@ -365,7 +390,6 @@
             modal.classList.add("flex");
         }
 
-        // 💡 [修正完畢]：清空原先殘留錯誤的 modal.add 賦值
         function closeGroupModal() {
             const modal = document.getElementById("group-modal");
             modal.classList.add("hidden");
@@ -392,15 +416,19 @@
 
         // 樂觀更新 + 離線安全貯列演算法
         async function toggleCheckIn(ids, shouldCheckIn) {
+            const oldGuestsState = JSON.parse(JSON.stringify(guests));
+
             ids.forEach(id => {
                 const guest = guests.find(g => Number(g.id) === Number(id));
                 if (guest) guest.status = shouldCheckIn ? "已報到" : "未報到";
             });
             
             renderDashboard(); 
-            renderList(guests);
-            
-            if (!shouldCheckIn) highlightTable(null); 
+            // 💡 [修改點 4]：當取消報到或完成更新時，透過這行驅動最新的隱私/關連名單狀態
+            if (!shouldCheckIn) {
+                renderList([]); 
+                highlightTable(null); 
+            }
 
             if (shouldCheckIn) {
                 document.getElementById("search-input").value = "";
@@ -448,6 +476,9 @@
                     modal.classList.remove("hidden"); 
                     modal.classList.add("flex");
                     highlightTable(targetTables);
+                    
+                    // 💡 [修改點 5]：報到成功跳出大彈窗後，搜尋欄已被清空，此時將左側名單重置為初始隱私鎖定盾牌
+                    renderList([]);
                 }
             }
 
@@ -476,7 +507,7 @@
                     localStorage.setItem("wedding_sync_queue", JSON.stringify(syncQueue));
                 }
             } catch (error) {
-                print("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
+                console.log("[網路提示] 正在等待不穩定的 Wi-Fi 連線恢復...");
             } finally {
                 isSyncing = false;
                 updateSyncBadge();
