@@ -10,7 +10,8 @@
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         html { overflow-y: scroll; scrollbar-gutter: stable; }
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f7f5f0; }
-        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; transform: scale(1.15) !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
+        /* 💡 [修改點 1]：移除了 transform: scale(1.15) !important; 保持原本大小，僅亮起紅底紅框與陰影 */
+        .table-active { background-color: #fca5a5 !important; border-color: #ef4444 !important; z-index: 50; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4); }
         #reader video { object-fit: cover !important; border-radius: 12px; }
     </style>
 </head>
@@ -120,9 +121,35 @@
 
         async function initSystem() {
             await fetchGuests();
+            
+            // 💡 [修改點 2]：重構搜尋欄輸入監聽器，導入家族群組深度關聯
             document.getElementById("search-input").addEventListener("input", (e) => {
                 const keyword = e.target.value.trim();
-                const filtered = guests.filter(g => g.name.includes(keyword));
+                
+                if (keyword === "") {
+                    renderList(guests);
+                    return;
+                }
+                
+                // 1. 先找出名字包含關鍵字的所有賓客
+                const matchedByName = guests.filter(g => g.name.includes(keyword));
+                
+                // 2. 收集這些賓客的所有群組 ID (過濾掉空值)
+                const associatedGroupIds = new Set();
+                matchedByName.forEach(g => {
+                    if (g.groupId && String(g.groupId).trim() !== "") {
+                        associatedGroupIds.add(String(g.groupId).trim());
+                    }
+                });
+                
+                // 3. 重新篩選：只要「名字有中」或者是「屬於上述群組家族成員之一」的，通通打包顯示
+                const filtered = guests.filter(g => {
+                    const isNameMatch = g.name.includes(keyword);
+                    const currentGId = g.groupId ? String(g.groupId).trim() : "";
+                    const isGroupMatch = currentGId !== "" && associatedGroupIds.has(currentGId);
+                    return isNameMatch || isGroupMatch;
+                });
+                
                 renderList(filtered);
             });
         }
@@ -352,7 +379,6 @@
             toggleCheckIn(checkedIds, true);
         }
 
-        // 核心同步發送函式：支援分桌明細動態排版，並驅動多桌同時高亮
         async function toggleCheckIn(ids, shouldCheckIn) {
             ids.forEach(id => {
                 const guest = guests.find(g => Number(g.id) === Number(id));
@@ -362,7 +388,7 @@
             renderDashboard(); 
             renderList(guests);
             
-            if (!shouldCheckIn) highlightTable(null); // 取消報到時，清空所有高亮
+            if (!shouldCheckIn) highlightTable(null); 
 
             try {
                 const response = await fetch(API_URL, { 
@@ -420,7 +446,7 @@
                         modal.classList.remove("hidden"); 
                         modal.classList.add("flex");
                         
-                        // 💡 [關鍵升級修正]：直接將本次簽到的所有目標桌次陣列傳入，驅動整批高亮
+                        // 驅動全桌次同步亮起
                         highlightTable(targetTables);
                     }
                 }
@@ -430,13 +456,10 @@
             }
         }
 
-        // 💡 [多桌高亮重構]：智慧判定輸入值。無論傳入單一桌號還是桌號陣列，都能一舉全亮！
         function highlightTable(tableIds) {
-            // 首先清理地圖上所有的舊高亮
             document.querySelectorAll("#floor-plan > div").forEach(el => el.classList.remove("table-active"));
             if (!tableIds) return;
             
-            // 強制封裝成標準陣列進行遍歷
             const idsArray = Array.isArray(tableIds) ? tableIds : [tableIds];
             idsArray.forEach(id => {
                 const targetTable = document.getElementById("table-" + String(id).replace(".0", "").trim());
@@ -446,7 +469,7 @@
 
         document.addEventListener("click", (e) => {
             if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT" && !e.target.closest("#success-modal") && !e.target.closest("#scanner-modal") && !e.target.closest("#group-modal")) {
-                highlightTable(null); // 點擊外圍空白處時清空高亮
+                highlightTable(null); 
             }
         });
         
