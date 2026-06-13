@@ -189,6 +189,12 @@ header {
 .status-tag.done { background: var(--greenbg); color: var(--green); }
 .status-tag.todo { background: var(--goldbg); color: var(--gold); }
 .status-tag.partial { background: #fff3e0; color: #b35a00; }
+.group-tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; color: var(--sub);
+  background: var(--goldbg); border: 1px solid var(--border);
+}
 .no-result { text-align:center; padding:24px 0; color:var(--sub); font-size:14px; }
 
 /* ── Floor plan panel ───────────────────────── */
@@ -210,39 +216,22 @@ header {
   position: relative;
 }
 
-/* Grid: 6 col (col5=aisle 14px), 5 row (row3=aisle 12px) */
+/* Grid: 6 col (col5=aisle 12px), 5 row (row3=aisle 12px) */
 .floor-grid {
   position: absolute; inset: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 14px 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr 12px 1fr;
   grid-template-rows: 1fr 1fr 12px 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
-/* Aisle cells */
-.aisle-v {
-  grid-row: 1 / span 5;
-  grid-column: 5;
-  background: var(--aisle);
-  border-radius: 4px;
-  position: relative;
-}
-.aisle-v::after {
-  content: '走\A道';
-  white-space: pre;
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: clamp(6px, .65vw, 8px);
-  color: var(--gold); opacity: .55;
-  letter-spacing: .05em;
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-}
-.aisle-h {
-  grid-row: 3;
-  grid-column: 1 / span 4;
-  background: var(--aisle);
-  border-radius: 4px;
+/* L-shaped aisle (single element, corner always connected) */
+.aisle-L {
+  grid-row: 3 / span 3;
+  grid-column: 2 / span 4;
+  border-top: 2px solid rgba(184,134,11,.6);
+  border-right: 2px solid rgba(184,134,11,.6);
+  pointer-events: none;
 }
 
 /* Table circle */
@@ -427,9 +416,8 @@ header {
         <div class="stage-bar">舞　台</div>
         <div class="floor-wrap">
           <div class="floor-grid" id="floor-grid">
-            <!-- aisle visual cells (persistent) -->
-            <div class="aisle-v"></div>
-            <div class="aisle-h"></div>
+            <!-- L-shaped aisle (persistent) -->
+            <div class="aisle-L"></div>
             <!-- table circles rendered by JS -->
           </div>
         </div>
@@ -489,7 +477,7 @@ let currentModalGuests = [];
 
 // Grid: col5=aisle, row3=aisle → tables shift accordingly
 const GRID_POS = {
-  "主桌": "grid-row:1/span 2;grid-column:1",
+  "主桌": "grid-row:1/span 5;grid-column:1;align-self:center;height:60%",
   "1":   "grid-row:1;grid-column:2",
   "2":   "grid-row:1;grid-column:3",
   "3":   "grid-row:1;grid-column:4",
@@ -498,7 +486,7 @@ const GRID_POS = {
   "7":   "grid-row:2;grid-column:3",
   "8":   "grid-row:2;grid-column:4",
   "9":   "grid-row:2;grid-column:6",
-  "10":  "grid-row:4;grid-column:2",
+  "10":  "grid-row:4;grid-column:2;transform:translateY(calc(50% + 4px))", // 在11和15中間
   "11":  "grid-row:4;grid-column:3",
   "12":  "grid-row:4;grid-column:4",
   "13":  "grid-row:4;grid-column:6",
@@ -606,26 +594,12 @@ function doSearch(q) {
   const groupIds = new Set(direct.map(g => g.groupId).filter(Boolean));
   const directIds = new Set(direct.map(g => g.id));
 
-  // All members of matched groups
+  // All members of matched groups (direct matches + their group-mates)
   const pool = allGuests.filter(g => directIds.has(g.id) || (g.groupId && groupIds.has(g.groupId)));
-
-  // One card per group
-  const seen = new Set();
-  const groups = [];
-  pool.forEach(g => {
-    const key = g.groupId || g.id;
-    if (!seen.has(key)) {
-      seen.add(key);
-      const members = g.groupId
-        ? allGuests.filter(m => m.groupId === g.groupId)
-        : [g];
-      groups.push(members);
-    }
-  });
 
   document.getElementById('privacy-lock').style.display = 'none';
 
-  if (!groups.length) {
+  if (!pool.length) {
     document.getElementById('result-list').style.display = 'none';
     document.getElementById('no-result').style.display   = 'block';
     highlightTables(null);
@@ -640,24 +614,30 @@ function doSearch(q) {
   const allTableIds = [...new Set(pool.map(g => String(g.table)).filter(Boolean))];
   highlightTables(allTableIds);
 
-  groups.forEach(members => {
-    const allDone  = members.every(m => m.status === '已報到');
-    const someDone = members.some(m => m.status === '已報到');
-    const tables   = [...new Set(members.map(m => m.table))];
+  // One card per person (no merging of group names)
+  pool.forEach(person => {
+    const members = person.groupId
+      ? allGuests.filter(m => m.groupId === person.groupId)
+      : [person];
+    const others = members.filter(m => m.id !== person.id);
 
+    const done = person.status === '已報到';
     const card = document.createElement('div');
     card.className = 'result-card';
+    // Click any card → open check-in modal for the whole group
     card.onclick = () => openModal(members);
 
-    const tag = allDone
+    const tag = done
       ? '<span class="status-tag done">✓ 已報到</span>'
-      : someDone
-        ? '<span class="status-tag partial">部分報到</span>'
-        : '<span class="status-tag todo">未報到</span>';
+      : '<span class="status-tag todo">未報到</span>';
+
+    const groupLabel = others.length
+      ? `<span class="group-tag">同組：${others.map(m => m.name).join('、')}</span>`
+      : '';
 
     card.innerHTML =
-      `<div class="result-name">${members.map(m => m.name).join('、')}</div>` +
-      `<div class="result-meta"><span>${tables.join('、')} 桌</span>${tag}</div>`;
+      `<div class="result-name">${person.name}</div>` +
+      `<div class="result-meta"><span>${person.table} 桌</span>${tag}${groupLabel}</div>`;
     list.appendChild(card);
   });
 }
